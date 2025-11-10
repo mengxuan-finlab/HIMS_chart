@@ -1,0 +1,22 @@
+[
+  {
+    "date": "2024-06-30",
+    "long_term_solvency": 0.18
+  },
+  {
+    "date": "2024-09-30",
+    "long_term_solvency": 0.11
+  },
+  {
+    "date": "2024-12-31",
+    "long_term_solvency": 0.11
+  },
+  {
+    "date": "2025-03-31",
+    "long_term_solvency": 0.55
+  },
+  {
+    "date": "2025-06-30",
+    "long_term_solvency": -54.47
+  }
+]
