@@ -13,7 +13,7 @@ q_fin = ticker.quarterly_financials
 revenue = q_fin.loc["Total Revenue"]
 net_income = q_fin.loc["Net Income"]
 
-gross_margin = (net_income/revenue*100).round(2)
+net_margin = (net_income/revenue*100).round(2)
 
 
 data = []
