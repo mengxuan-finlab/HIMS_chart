@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>HIMS 資本支出佔造血金額的比例（比率）</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 40px 16px;
+    }
+    .card {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>HIMS 資本支出佔造血金額的比例（比率）</h2>
+    <canvas id="capEXOCFChart"></canvas>
+  </div>
+
+  <script>
+    // 1. 讀取 JSON
+    fetch("hims_capEX_OCF.json")
+      .then(response => response.json())
+      .then(data => {
+        const labels = data.map(d => d.date);            // X 軸：日期
+        const capEX_OCF = data.map(d => d.capEX_OCF);   // Y 軸：流動比率
+
+        const ctx = document.getElementById("capEXOCFChart").getContext("2d");
+
+        // 2. 建立 Chart.js 圖表
+        new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "資本支出佔造血金額的比例（比率）",
+              data: capEX_OCF,
+              borderColor: "#36A2EB",
+              backgroundColor: "rgba(54,162,235,0.2)",
+              borderWidth: 2,
+              tension: 0.3,
+              pointRadius: 4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                ticks: {
+                  callback: function(value) {
+                    // 直接顯示比率，例如 2.68x
+                    return value.toFixed(2) + "x";
+                  }
+                },
+                title: {
+                  display: true,
+                  text: "比率（倍數）"
+                },
+                min: -1 // 讓 Y 軸從 0 開始，比較直覺
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: "年度"
+                }
+              }
+            },
+            plugins: {
+              legend: { display: true },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return "比率：" + context.parsed.y.toFixed(2) + "x";
+                  }
+                }
+              }
+            }
+          }
+        });
+      })
+      .catch(err => {
+        console.error("載入 JSON 失敗：", err);
+      });
+  </script>
+</body>
+</html>
