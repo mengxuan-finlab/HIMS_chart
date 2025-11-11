@@ -36,6 +36,7 @@
     fetch("hims_capEX_OCF.json")
       .then(response => response.json())
       .then(data => {
+        data.reverse(); //  讓 2020 → 2024 順序從左到右遞增
         const labels = data.map(d => d.date);            // X 軸：日期
         const capEX_OCF = data.map(d => d.capEX_OCF);   // Y 軸：流動比率
 
