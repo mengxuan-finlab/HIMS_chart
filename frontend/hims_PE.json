@@ -1,0 +1,26 @@
+[
+  {
+    "date": "2024-12-31",
+    "priceToEarningsRatio": 41.42723555324584
+  },
+  {
+    "date": "2023-12-31",
+    "priceToEarningsRatio": -79.12885147371104
+  },
+  {
+    "date": "2022-12-31",
+    "priceToEarningsRatio": -19.960235226407622
+  },
+  {
+    "date": "2021-12-31",
+    "priceToEarningsRatio": -11.363834582803111
+  },
+  {
+    "date": "2020-12-31",
+    "priceToEarningsRatio": -28.49539645578006
+  },
+  {
+    "date": "TTM",
+    "priceToEarningsRatio": 66.52
+  }
+]
