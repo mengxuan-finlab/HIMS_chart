@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>HIMS ROE / ROA 變化 (含 TTM)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 40px 16px;
+    }
+    .card {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 36px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+    h2 {
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 24px;
+      color: #111827;
+    }
+    canvas {
+      width: 100%;
+      height: 500px !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>HIMS 股東權益 / 資產報酬率 (含 TTM)</h2>
+    <canvas id="roeRoaChart"></canvas>
+  </div>
+
+  <script>
+  // 同時抓兩個 JSON：ROE + ROA
+  Promise.all([
+    fetch("hims_ROE.json").then(r => r.json()),
+    fetch("hims_ROA.json").then(r => r.json())
+  ])
+  .then(([roeData, roaData]) => {
+    // 先處理 ROE：拆 TTM + 歷史並排序
+    const ttmRoe = roeData.find(d => d.date === "TTM");
+    const histRoe = roeData
+      .filter(d => d.date !== "TTM")
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // 同樣處理 ROA
+    const ttmRoa = roaData.find(d => d.date === "TTM");
+    const histRoa = roaData
+      .filter(d => d.date !== "TTM")
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // 假設兩邊年度一樣，用 ROE 的排序為主
+    const orderedRoe = ttmRoe ? [...histRoe, ttmRoe] : histRoe;
+    const orderedRoa = ttmRoa ? [...histRoa, ttmRoa] : histRoa;
+
+    const labels = orderedRoe.map(d => d.date);           // 年度 / TTM
+    const roeValues = orderedRoe.map(d => d.returnOnEquity);
+    const roaValues = orderedRoa.map(d => d.returnOnAssets);
+
+    const ctx = document.getElementById("roeRoaChart");
+
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "股東權益報酬率 (ROE)",
+            data: roeValues,
+            borderColor: "#2563EB",
+            borderWidth: 3,
+            tension: 0.35,
+            pointBackgroundColor: (ctx) =>
+              ctx.dataIndex === labels.length - 1 ? "#DC2626" : "#2563EB",
+            pointBorderColor: (ctx) =>
+              ctx.dataIndex === labels.length - 1 ? "#DC2626" : "#2563EB",
+            pointRadius: (ctx) =>
+              ctx.dataIndex === labels.length - 1 ? 8 : 5,
+            fill: false
+          },
+          {
+            label: "資產報酬率 (ROA)",
+            data: roaValues,
+            borderColor: "#10B981",
+            borderWidth: 3,
+            tension: 0.35,
+            pointBackgroundColor: (ctx) =>
+              ctx.dataIndex === labels.length - 1 ? "#DC2626" : "#10B981",
+            pointBorderColor: (ctx) =>
+              ctx.dataIndex === labels.length - 1 ? "#DC2626" : "#10B981",
+            pointRadius: (ctx) =>
+              ctx.dataIndex === labels.length - 1 ? 8 : 5,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { font: { size: 16 } }
+          },
+          tooltip: {
+            titleFont: { size: 16 },
+            bodyFont: { size: 15 },
+            callbacks: {
+              // 如果你想看百分比，這裡改成 *100 加 %
+              label: (ctx) => {
+                const val = ctx.parsed.y;
+                return `${ctx.dataset.label}：${(val * 100).toFixed(2)}%`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            title: { display: true, text: "報酬率", font: { size: 18 } },
+            ticks: {
+              font: { size: 14 },
+              callback: (value) => (value * 100).toFixed(0) + "%"
+            }
+          },
+          x: {
+            title: { display: true, text: "年度 / TTM", font: { size: 18 } },
+            ticks: { font: { size: 13 } }
+          }
+        }
+      }
+    });
+  });
+  </script>
+</body>
+</html>
