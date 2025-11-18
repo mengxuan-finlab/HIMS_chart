@@ -16,23 +16,21 @@ data = response.json()
 # 將 API JSON 轉成 DataFrame
 df = pd.DataFrame(data)
 
-# 移除必要欄位缺值列
-df = df.dropna(subset=["totalCurrentAssets", "totalCurrentLiabilities"])
-
-# 計算毛利率（小數, 例如 0.82）
-df["current_ratio"] = (df["totalCurrentAssets"] / df["totalCurrentLiabilities"]).round(2)
+# 移除缺值列
+df = df.dropna(subset=["totalEquity"])
 
 # 轉成 JSON-friendly 結構
 records = [
     {
-        "date": str(row["date"]),
-        "current_ratio": float(row["current_ratio"])
+        "date": str(d),
+        "totalEquity": float(RV),
+        "totalEquity_million": float(RV) / 1_000_000  # 轉成百萬美元
     }
-    for _, row in df.iterrows()
+    for d, RV in zip(df["date"], df["totalEquity"],)
 ]
 
 # 寫出到 JSON 檔案
-out_path = Path(__file__).parent / "hims_current_ratio.json"
+out_path = Path(__file__).parent / "hims_totalEquity.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(records, f, ensure_ascii=False, indent=2)
 

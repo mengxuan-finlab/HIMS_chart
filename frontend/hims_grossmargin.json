@@ -1,32 +1,22 @@
 [
   {
-    "date": "2024-06-30",
-    "label": "2024Q2",
-    "revenue_million": 315.65,
-    "gross_margin": 81.3
-  },
-  {
-    "date": "2024-09-30",
-    "label": "2024Q3",
-    "revenue_million": 401.56,
-    "gross_margin": 79.16
-  },
-  {
-    "date": "2024-12-31",
-    "label": "2024Q4",
-    "revenue_million": 481.14,
-    "gross_margin": 76.81
-  },
-  {
-    "date": "2025-03-31",
-    "label": "2025Q1",
-    "revenue_million": 586.01,
-    "gross_margin": 73.5
+    "date": "2025-09-30",
+    "grossMargin": 73.8
   },
   {
     "date": "2025-06-30",
-    "label": "2025Q2",
-    "revenue_million": 544.83,
-    "gross_margin": 76.39
+    "grossMargin": 76.39
+  },
+  {
+    "date": "2025-03-31",
+    "grossMargin": 73.5
+  },
+  {
+    "date": "2024-12-31",
+    "grossMargin": 76.81
+  },
+  {
+    "date": "2024-09-30",
+    "grossMargin": 79.16
   }
 ]

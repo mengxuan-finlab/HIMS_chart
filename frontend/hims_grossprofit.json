@@ -1,32 +1,27 @@
 [
   {
-    "date": "2024-06-30",
-    "label": "2024Q2",
-    "profit": 256613000.0,
-    "profit_million": 256.61
-  },
-  {
-    "date": "2024-09-30",
-    "label": "2024Q3",
-    "profit": 317886000.0,
-    "profit_million": 317.89
-  },
-  {
-    "date": "2024-12-31",
-    "label": "2024Q4",
-    "profit": 369541000.0,
-    "profit_million": 369.54
-  },
-  {
-    "date": "2025-03-31",
-    "label": "2025Q1",
-    "profit": 430689000.0,
-    "profit_million": 430.69
+    "date": "2025-09-30",
+    "grossProfit": 442058000.0,
+    "grossProfit_million": 442.058
   },
   {
     "date": "2025-06-30",
-    "label": "2025Q2",
-    "profit": 416196000.0,
-    "profit_million": 416.2
+    "grossProfit": 416196000.0,
+    "grossProfit_million": 416.196
+  },
+  {
+    "date": "2025-03-31",
+    "grossProfit": 430689000.0,
+    "grossProfit_million": 430.689
+  },
+  {
+    "date": "2024-12-31",
+    "grossProfit": 369541000.0,
+    "grossProfit_million": 369.541
+  },
+  {
+    "date": "2024-09-30",
+    "grossProfit": 317886000.0,
+    "grossProfit_million": 317.886
   }
 ]

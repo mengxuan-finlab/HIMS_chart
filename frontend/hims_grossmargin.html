@@ -33,11 +33,12 @@
 
   <script>
     // 1. 讀取 JSON
-    fetch("hims_grossmargin.json")
+    fetch("hims_grossMargin.json")
       .then(response => response.json())
       .then(data => {
-        const labels = data.map(d => d.label);           // 2024Q2...
-        const grossMargins = data.map(d => d.gross_margin);
+        data.reverse(); //  讓 2020 → 2024 順序從左到右遞增 
+        const labels = data.map(d => d.date);          
+        const grossMargin = data.map(d => d.grossMargin);
 
         const ctx = document.getElementById("grossMarginChart").getContext("2d");
 
@@ -48,7 +49,7 @@
             labels: labels,
             datasets: [{
               label: "毛利率 (%)",
-              data: grossMargins,
+              data: grossMargin,
               borderWidth: 2,
               tension: 0.3,
               pointRadius: 4,

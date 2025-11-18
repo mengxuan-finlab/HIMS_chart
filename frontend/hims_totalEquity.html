@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>HIMS 毛利圖表 (季度)</title>
+  <title>HIMS 股東權益 (季度)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -27,19 +27,19 @@
 </head>
 <body>
   <div class="card">
-    <h2>HIMS 毛利圖表 (季度)</h2>
+    <h2>HIMS 股東權益 (季度)</h2>
     <canvas id="revenueChart"></canvas>
   </div>
 
   <script>
   // 1. 讀取 JSON
-  fetch("hims_grossProfit.json")
+  fetch("hims_totalEquity.json")
     .then(response => response.json())
     .then(data => {
       data.reverse(); //  讓 2020 → 2024 順序從左到右遞增  
       // 對應正確欄位
       const labels = data.map(d => d.date);        // X軸：日期
-      const grossProfit_million = data.map(d => d.grossProfit_million);    // Y軸：股東權益數值
+      const totalEquity_million = data.map(d => d.totalEquity_million);    // Y軸：股東權益數值
 
       const ctx = document.getElementById("revenueChart").getContext("2d");
 
@@ -49,8 +49,8 @@
         data: {
           labels: labels,
           datasets: [{
-            label: "毛利(美元)",
-            data: grossProfit_million,
+            label: "股東權益(美元)",
+            data: totalEquity_million,
             borderColor: "#36A2EB",
             backgroundColor: "rgba(54,162,235,0.2)",
             borderWidth: 2,
@@ -71,7 +71,7 @@
               },
               title: {
                 display: true,
-                text: "毛利（美元 / 股）"
+                text: "股東權益（美元 / 股）"
               }
             },
             x: {
@@ -86,7 +86,7 @@
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return "grossprofit：" + context.parsed.y.toFixed(2) + " (百萬)美元/股";
+                  return "equity：" + context.parsed.y.toFixed(2) + " (百萬)美元/股";
                 }
               }
             }

@@ -1,74 +1,100 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>HIMS 營收圖表</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!--載入chart.js畫圖工具-->
+  <meta charset="UTF-8" />
+  <title>HIMS 營收圖表 (季度)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
-      font-family: 'Noto Sans TC', sans-serif;
-      background: #eae9e9;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 40px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 40px 16px;
     }
-    canvas {
-      max-width: 800px;
-      background: rgb(248, 248, 248);
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      padding: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.4); /* 淡邊框 */
+    .card {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 16px;
     }
   </style>
 </head>
 <body>
-  <h2>HIMS 每季營收（百萬美元）</h2>
-  <canvas id="revenueChart"></canvas>
+  <div class="card">
+    <h2>HIMS 營收圖表 (季度)</h2>
+    <canvas id="revenueChart"></canvas>
+  </div>
 
   <script>
-    // 1️⃣ 讀取 JSON 資料
-    fetch("hims_revenue.json")
-      .then(response => response.json())
-      .then(data => {
-        // 2️⃣ 準備資料
-        const labels = data.map(d => d.label);  /*季度資料*/
-        const revenues = data.map(d => d.revenue_million);  /*營收資料*/
+  // 1. 讀取 JSON
+  fetch("hims_revenue.json")
+    .then(response => response.json())
+    .then(data => {
+      data.reverse(); //  讓 2020 → 2024 順序從左到右遞增  
+      // 對應正確欄位
+      const labels = data.map(d => d.date);        // X軸：日期
+      const revenue_million = data.map(d => d.revenue_million);    // Y軸：股東權益數值
 
-        // 3️⃣ 建立 Chart.js 圖表
-        const ctx = document.getElementById("revenueChart").getContext("2d");  /*cts是畫筆 畫在canvas id="revenueChart"上*/
-        new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [{
-              label: "營收 (百萬美元)", /*x軸*/
-              data: revenues,  /*y軸數值*/
-              borderColor: "#36A2EB", /*線條顏色*/
-              backgroundColor: "rgba(54,162,235,0.2)",  /*填充顏色*/
-              borderWidth: 2,  /*線條粗細*/
-              tension: 0.3,  /*線條彎曲程度（0 = 直線，1 = 超滑）*/
-              pointRadius: 4,  /*每個節點的小圓點大小*/
-              fill: true  /*是否填滿線下區域*/
-            }]
-          },
-          options: {
-            responsive: true,  /*讓圖表自動隨著螢幕寬度縮放，在手機上也不會跑版*/
-            plugins: {  /*管理外掛功能*/
-              legend: { display: true }, /* 顯示圖例（上方會看到「營收 (百萬美元)」*/
-              tooltip: {
-                callbacks: {
-                  label: ctx => `營收: ${ctx.formattedValue} 百萬美元`  /*設定滑鼠移到點上時的提示框*/
+      const ctx = document.getElementById("revenueChart").getContext("2d");
+
+      // 2. 建立 Chart.js 圖表
+      new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "營收(美元)",
+            data: revenue_million,
+            borderColor: "#36A2EB",
+            backgroundColor: "rgba(54,162,235,0.2)",
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              ticks: {
+                callback: function(value) {
+                  // 直接顯示小數兩位，例如 0.05, 0.20, -0.10
+                  return value.toFixed(2);
                 }
+              },
+              title: {
+                display: true,
+                text: "營收（美元 / 股）"
               }
             },
-            scales: {
-              y: { beginAtZero: false }  /*Y 軸不要從 0 開始，要根據資料自動縮放，這樣變化比較明顯（財報圖常這樣做）*/
+            x: {
+              title: {
+                display: true,
+                text: "季度"
+              }
+            }
+          },
+          plugins: {
+            legend: { display: true },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return "revenue：" + context.parsed.y.toFixed(2) + " (百萬)美元/股";
+                }
+              }
             }
           }
-        });
+        }
       });
+    })
+    .catch(err => console.error("載入 JSON 失敗：", err));
   </script>
 </body>
 </html>

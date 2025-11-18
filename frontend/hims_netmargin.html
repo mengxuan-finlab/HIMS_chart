@@ -36,8 +36,9 @@
     fetch("hims_netmargin.json")
       .then(response => response.json())
       .then(data => {
-        const labels = data.map(d => d.label);           // 2024Q2...
-        const netMargins = data.map(d => d.net_margin);
+        data.reverse(); //  讓 2020 → 2024 順序從左到右遞增 
+        const labels = data.map(d => d.date);          
+        const netIncomeMargin = data.map(d => d.netIncomeMargin);
 
         const ctx = document.getElementById("netMarginChart").getContext("2d");
 
@@ -48,7 +49,7 @@
             labels: labels,
             datasets: [{
               label: "淨利率 (%)",
-              data: netMargins,
+              data: netIncomeMargin,
               borderWidth: 2,
               tension: 0.3,
               pointRadius: 4,

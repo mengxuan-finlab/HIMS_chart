@@ -1,32 +1,27 @@
 [
   {
-    "date": "2024-06-30",
-    "label": "2024Q2",
-    "net income": 13297000.0,
-    "net_income_million": 13.3
-  },
-  {
-    "date": "2024-09-30",
-    "label": "2024Q3",
-    "net income": 75588000.0,
-    "net_income_million": 75.59
-  },
-  {
-    "date": "2024-12-31",
-    "label": "2024Q4",
-    "net income": 26025000.0,
-    "net_income_million": 26.02
-  },
-  {
-    "date": "2025-03-31",
-    "label": "2025Q1",
-    "net income": 49485000.0,
-    "net_income_million": 49.48
+    "date": "2025-09-30",
+    "netIncome": 15774000.0,
+    "netIncome_million": 15.774
   },
   {
     "date": "2025-06-30",
-    "label": "2025Q2",
-    "net income": 42505000.0,
-    "net_income_million": 42.5
+    "netIncome": 42505000.0,
+    "netIncome_million": 42.505
+  },
+  {
+    "date": "2025-03-31",
+    "netIncome": 49485000.0,
+    "netIncome_million": 49.485
+  },
+  {
+    "date": "2024-12-31",
+    "netIncome": 26025000.0,
+    "netIncome_million": 26.025
+  },
+  {
+    "date": "2024-09-30",
+    "netIncome": 75588000.0,
+    "netIncome_million": 75.588
   }
 ]

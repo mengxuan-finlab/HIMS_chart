@@ -1,0 +1,27 @@
+[
+  {
+    "date": "2025-09-30",
+    "totalEquity": 580982000.0,
+    "totalEquity_million": 580.982
+  },
+  {
+    "date": "2025-06-30",
+    "totalEquity": 562696000.0,
+    "totalEquity_million": 562.696
+  },
+  {
+    "date": "2025-03-31",
+    "totalEquity": 549261000.0,
+    "totalEquity_million": 549.261
+  },
+  {
+    "date": "2024-12-31",
+    "totalEquity": 476716000.0,
+    "totalEquity_million": 476.716
+  },
+  {
+    "date": "2024-09-30",
+    "totalEquity": 440051000.0,
+    "totalEquity_million": 440.051
+  }
+]

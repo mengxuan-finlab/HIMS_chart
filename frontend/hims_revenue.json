@@ -1,32 +1,27 @@
 [
   {
-    "date": "2024-06-30",
-    "label": "2024Q2",
-    "revenue": 315648000.0,
-    "revenue_million": 315.65
+    "date": "2025-09-30",
+    "revenue": 598976000.0,
+    "revenue_million": 598.976
   },
   {
-    "date": "2024-09-30",
-    "label": "2024Q3",
-    "revenue": 401556000.0,
-    "revenue_million": 401.56
-  },
-  {
-    "date": "2024-12-31",
-    "label": "2024Q4",
-    "revenue": 481139000.0,
-    "revenue_million": 481.14
+    "date": "2025-06-30",
+    "revenue": 544833000.0,
+    "revenue_million": 544.833
   },
   {
     "date": "2025-03-31",
-    "label": "2025Q1",
     "revenue": 586010000.0,
     "revenue_million": 586.01
   },
   {
-    "date": "2025-06-30",
-    "label": "2025Q2",
-    "revenue": 544833000.0,
-    "revenue_million": 544.83
+    "date": "2024-12-31",
+    "revenue": 481139000.0,
+    "revenue_million": 481.139
+  },
+  {
+    "date": "2024-09-30",
+    "revenue": 401556000.0,
+    "revenue_million": 401.556
   }
 ]

@@ -1,32 +1,22 @@
 [
   {
-    "date": "2024-06-30",
-    "label": "2024Q2",
-    "revenue_million": 315.65,
-    "net_margin": 13297000.0
-  },
-  {
-    "date": "2024-09-30",
-    "label": "2024Q3",
-    "revenue_million": 401.56,
-    "net_margin": 75588000.0
-  },
-  {
-    "date": "2024-12-31",
-    "label": "2024Q4",
-    "revenue_million": 481.14,
-    "net_margin": 26025000.0
-  },
-  {
-    "date": "2025-03-31",
-    "label": "2025Q1",
-    "revenue_million": 586.01,
-    "net_margin": 49485000.0
+    "date": "2025-09-30",
+    "netIncomeMargin": 2.63
   },
   {
     "date": "2025-06-30",
-    "label": "2025Q2",
-    "revenue_million": 544.83,
-    "net_margin": 42505000.0
+    "netIncomeMargin": 7.8
+  },
+  {
+    "date": "2025-03-31",
+    "netIncomeMargin": 8.44
+  },
+  {
+    "date": "2024-12-31",
+    "netIncomeMargin": 5.41
+  },
+  {
+    "date": "2024-09-30",
+    "netIncomeMargin": 18.82
   }
 ]

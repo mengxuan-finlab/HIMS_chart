@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 # 你的 FMP API 連結（記得把 API key 填上）
-url = "https://financialmodelingprep.com/stable/balance-sheet-statement?symbol=HIMS&period=quarter&apikey=PHTJpjhhPVzIdzjMEP84WKq5JiNRYxA6"
+url = "https://financialmodelingprep.com/stable/income-statement?symbol=HIMS&period=quarter&apikey=PHTJpjhhPVzIdzjMEP84WKq5JiNRYxA6"
 # 發出 GET 請求
 response = requests.get(url)
 
@@ -17,22 +17,22 @@ data = response.json()
 df = pd.DataFrame(data)
 
 # 移除必要欄位缺值列
-df = df.dropna(subset=["totalCurrentAssets", "totalCurrentLiabilities"])
+df = df.dropna(subset=["grossProfit", "revenue"])
 
 # 計算毛利率（小數, 例如 0.82）
-df["current_ratio"] = (df["totalCurrentAssets"] / df["totalCurrentLiabilities"]).round(2)
+df["grossMargin"] = (df["grossProfit"] / df["revenue"]*100).round(2)
 
 # 轉成 JSON-friendly 結構
 records = [
     {
         "date": str(row["date"]),
-        "current_ratio": float(row["current_ratio"])
+        "grossMargin": float(row["grossMargin"])
     }
     for _, row in df.iterrows()
 ]
 
 # 寫出到 JSON 檔案
-out_path = Path(__file__).parent / "hims_current_ratio.json"
+out_path = Path(__file__).parent / "hims_grossMargin.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(records, f, ensure_ascii=False, indent=2)
 

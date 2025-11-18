@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>HIMS 股東權益變化</title>
+  <title>HIMS 淨利圖表 (季度)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -27,20 +27,21 @@
 </head>
 <body>
   <div class="card">
-    <h2>HIMS 股東權益變化（季度）</h2>
-    <canvas id="equityChart"></canvas>
+    <h2>HIMS 淨利圖表 (季度)</h2>
+    <canvas id="netincomeChart"></canvas>
   </div>
 
   <script>
   // 1. 讀取 JSON
-  fetch("hims_equity.json")
+  fetch("hims_netincome.json")
     .then(response => response.json())
     .then(data => {
-      // ✅ 對應正確欄位
+      data.reverse(); //  讓 2020 → 2024 順序從左到右遞增  
+      // 對應正確欄位
       const labels = data.map(d => d.date);        // X軸：日期
-      const equities = data.map(d => d.equity);    // Y軸：股東權益數值
+      const netIncome_million = data.map(d => d.netIncome_million);    // Y軸：股東權益數值
 
-      const ctx = document.getElementById("equityChart").getContext("2d");
+      const ctx = document.getElementById("netincomeChart").getContext("2d");
 
       // 2. 建立 Chart.js 圖表
       new Chart(ctx, {
@@ -48,8 +49,8 @@
         data: {
           labels: labels,
           datasets: [{
-            label: "股東權益（美元）",
-            data: equities,
+            label: "淨利(美元)",
+            data: netIncome_million,
             borderColor: "#36A2EB",
             backgroundColor: "rgba(54,162,235,0.2)",
             borderWidth: 2,
@@ -64,13 +65,13 @@
             y: {
               ticks: {
                 callback: function(value) {
-                  // 格式化數字（例如轉成百萬顯示）
-                  return (value / 1_000_000).toFixed(1) + "M";
+                  // 直接顯示小數兩位，例如 0.05, 0.20, -0.10
+                  return value.toFixed(2);
                 }
               },
               title: {
                 display: true,
-                text: "金額（百萬美元）"
+                text: "淨利（美元 / 股）"
               }
             },
             x: {
@@ -85,7 +86,7 @@
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return "股東權益：" + context.parsed.y.toLocaleString() + " 美元";
+                  return "netincome：" + context.parsed.y.toFixed(2) + " (百萬)美元/股";
                 }
               }
             }
@@ -93,9 +94,7 @@
         }
       });
     })
-    .catch(err => {
-      console.error("載入 JSON 失敗：", err);
-    });
-</script>
+    .catch(err => console.error("載入 JSON 失敗：", err));
+  </script>
 </body>
 </html>
