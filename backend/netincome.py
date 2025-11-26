@@ -30,7 +30,7 @@ records = [
 ]
 
 # 寫出到 JSON 檔案
-out_path = Path(__file__).parent / "hims_netIncome.json"
+out_path = Path(__file__).parent / "hims_netincome.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(records, f, ensure_ascii=False, indent=2)
 

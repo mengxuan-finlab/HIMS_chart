@@ -44,7 +44,7 @@
   <script>
     async function loadData() {
       const netIncomeMargin = await fetch("hims_netmargin.json").then(r => r.json());
-      const netIncome = await fetch("hims_netIncome.json").then(r => r.json());
+      const netIncome = await fetch("hims_netincome.json").then(r => r.json());
 
       // 合併資料，依 date key 匹配
       const merged = netIncomeMargin
