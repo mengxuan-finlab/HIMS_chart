@@ -28,7 +28,7 @@
 <body>
   <div class="card">
     <h2>HIMS 股東權益 (季度)</h2>
-    <canvas id="revenueChart"></canvas>
+    <canvas id="equityChart"></canvas>
   </div>
 
   <script>
@@ -41,7 +41,7 @@
       const labels = data.map(d => d.date);        // X軸：日期
       const totalEquity_million = data.map(d => d.totalEquity_million);    // Y軸：股東權益數值
 
-      const ctx = document.getElementById("revenueChart").getContext("2d");
+      const ctx = document.getElementById("equityChart").getContext("2d");
 
       // 2. 建立 Chart.js 圖表
       new Chart(ctx, {
