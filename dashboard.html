@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>HIMS 財報全自動化分析儀表板</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --secondary: #10b981;
+      --danger: #dc2626;
+      --accent: #6366f1;
+      --gray-bg: #f8fafc;
+      --card-border: #e2e8f0;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background-color: #ffffff;
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    main.page {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 60px 24px 100px;
+    }
+
+    /* 頂部標題與 AI 總結 */
+    .header { margin-bottom: 40px; }
+    .page-title { font-size: 36px; font-weight: 800; letter-spacing: -0.025em; margin: 0; }
+    .meta-info { font-size: 14px; color: var(--text-muted); margin-top: 8px; }
+
+    .ai-insight-card {
+      background: var(--gray-bg);
+      border-left: 4px solid var(--primary);
+      padding: 24px;
+      border-radius: 8px;
+      margin: 32px 0 48px;
+    }
+    .ai-insight-card h3 { margin: 0 0 12px; font-size: 18px; color: var(--primary); display: flex; align-items: center; }
+    .one-liner { font-size: 19px; font-weight: 600; margin-bottom: 16px; }
+    .risk-tag { background: #fee2e2; color: var(--danger); padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: 700; margin-right: 8px; }
+
+    /* 章節與卡片 */
+    .section-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 60px 0 24px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--card-border);
+    }
+
+    .metric-card {
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 40px;
+      background: #fff;
+    }
+
+    .metric-name { font-size: 22px; font-weight: 700; margin: 0 0 8px; color: #0f172a; }
+    
+    details { margin-bottom: 20px; }
+    details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--primary); list-style: none; }
+    details summary::before { content: "▶ "; font-size: 10px; }
+    details[open] summary::before { content: "▼ "; }
+    .desc-content { background: #f1f5f9; padding: 16px; border-radius: 8px; margin-top: 10px; font-size: 15px; color: #475569; }
+
+    .chart-container { height: 380px; width: 100%; margin: 24px 0; }
+
+    /* AI 分析區塊 */
+    .analysis-section {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 32px;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--card-border);
+    }
+    .analysis-summary h4, .analysis-bullets h4 {
+      font-size: 16px;
+      margin: 0 0 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .summary-text { font-size: 15px; color: #334155; line-height: 1.8; }
+    .bullet-list { margin: 0; padding-left: 20px; list-style-type: disc; }
+    .bullet-list li { font-size: 14px; color: #334155; margin-bottom: 8px; }
+
+    @media (max-width: 768px) { .analysis-section { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<main class="page">
+  <div class="header">
+    <h1 class="page-title">HIMS 財報全自動化分析儀表板</h1>
+    <div class="meta-info" id="update-info">載入中...</div>
+  </div>
+
+  <div class="ai-insight-card">
+    <h3>🤖 AI 智能診斷</h3>
+    <div class="one-liner" id="one-liner"></div>
+    <div id="risk-container"></div>
+  </div>
+
+  <div id="dynamic-content"></div>
+</main>
+
+<script>
+// --- 1. Supabase 配置 (請填入你的資訊) ---
+const SUPABASE_URL = "https://zlkexplsleznuebighte.supabase.co";
+const SUPABASE_ANON_KEY = "sb_secret_171sMx6_5jVQVw9jVeF-mg_mqPmW69k";
+
+// --- 2. 取得網址參數 (例如 ?symbol=NVDA) ---
+const urlParams = new URLSearchParams(window.location.search);
+const currentSymbol = urlParams.get('symbol') || 'HIMS'; // 沒給參數就預設 HIMS
+
+// 渲染指標配置 (維持你原本的設定)
+const metricMeta = {
+    revenue: { title: "總營收 (Total Revenue)", desc: "反映公司在特定期間內的銷售規模...", unit: "M USD" },
+    gross_profit: { title: "毛利與毛利率 (Gross Profitability)", desc: "毛利反映核心產品競爭力...", unit: "M USD / %" },
+    net_income: { title: "淨利與淨利率 (Net Profitability)", desc: "淨利是公司最終盈餘...", unit: "M USD / %" },
+    eps_diluted: { title: "每股盈餘 (Diluted EPS)", desc: "股東最關注的每股獲利能力...", unit: "USD" },
+    total_equity: { title: "股東權益 (Total Equity)", desc: "代表公司的帳面淨值與財富積累...", unit: "M USD" },
+    current_ratio: { title: "流動比率 (Current Ratio)", desc: "短期償債能力指標...", unit: "x" },
+    long_term_solvency: { title: "長期償債能力 (Solvency)", desc: "衡量公司長期財務結構的穩定性...", unit: "Ratio" },
+    operating_cash_flow: { title: "營運現金流 (OCF)", desc: "反映真實的「造血」功能...", unit: "USD" },
+    free_cash_flow: { title: "自由現金流 (FCF)", desc: "可用於擴張或回饋股東的資金...", unit: "USD" },
+    capEX_OCF: { title: "資本支出/營運現金比", desc: "反映投入於資本設備與研發的比例...", unit: "Ratio" },
+    ocf_netincome: { title: "營運現金/淨利比", desc: "衡量盈餘品質...", unit: "Ratio" },
+    roe: { title: "ROE (股東權益報酬率)", desc: "衡量運用股東資金創造利潤的效率。", unit: "%" },
+    roa: { title: "ROA (資產報酬率)", desc: "衡量利用總資產創造利潤的效率。", unit: "%" },
+    pe: { title: "P/E Ratio (本益比)", desc: "反映預期成長性與溢價。", unit: "x" },
+    peg: { title: "PEG Ratio (本益成長比)", desc: "通常 < 1 代表潛在低估。", unit: "Ratio" }
+};
+
+const reportStructure = [
+    { section: "損益表指標", metrics: ["revenue", "gross_profit", "net_income", "eps_diluted"] },
+    { section: "資產負債與償債", metrics: ["total_equity", "current_ratio", "long_term_solvency"] },
+    { section: "現金流量分析", metrics: ["operating_cash_flow", "free_cash_flow", "capEX_OCF", "ocf_netincome"] },
+    { section: "估值與回報", metrics: ["roe", "roa", "pe", "peg"] }
+];
+
+// --- 3. 從 Supabase 抓取資料的函數 ---
+async function fetchCloudReport() {
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/tracked_stocks?symbol=eq.${currentSymbol.toUpperCase()}&select=report_json`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            }
+        });
+        const result = await response.json();
+
+        if (result.length > 0 && result[0].report_json) {
+            renderDashboard(result[0].report_json);
+        } else {
+            document.body.innerHTML = `<main class="page"><h1>❌ 找不到 ${currentSymbol} 的報告</h1><p>請先執行 Python 腳本將狀態設為 review 或更新資料。</p></main>`;
+        }
+    } catch (err) {
+        console.error("Supabase 讀取錯誤:", err);
+    }
+}
+
+// --- 4. 渲染邏輯 (這部分沿用你原本的代碼，只是包成 function) ---
+function renderDashboard(json) {
+    const data = json.data;
+    const ai = json.ai;
+
+    // 修改頁面標題
+    document.querySelector('.page-title').innerText = `${json.symbol} 財報分析儀表板`;
+    document.getElementById('update-info').innerText = `數據截止: ${json.as_of} | AI 生成於: ${json.ai_generated_at.split('T')[0]}`;
+    document.getElementById('one-liner').innerText = ai.one_liner;
+    document.getElementById('risk-container').innerHTML = ai.risks.map(r => `<span class="risk-tag">RISK</span> <span style="font-size:14px; color:#475569; margin-right:20px;">${r}</span>`).join('');
+
+    const container = document.getElementById('dynamic-content');
+
+    const getProcessedData = (id) => {
+        const raw = data[id];
+        if (!raw) return null;
+        const ttm = raw.find(i => i.date === "TTM");
+        const history = raw.filter(i => i.date !== "TTM").reverse();
+        return ttm ? [...history, ttm] : history;
+    };
+
+    reportStructure.forEach(sec => {
+        const h2 = document.createElement('h2');
+        h2.className = 'section-title';
+        h2.innerText = sec.section;
+        container.appendChild(h2);
+
+        sec.metrics.forEach(metricId => {
+            const mData = getProcessedData(metricId);
+            const aiInsight = ai.by_metric[metricId];
+            if (!mData || !aiInsight) return;
+
+            const card = document.createElement('div');
+            card.className = 'metric-card';
+            card.innerHTML = `
+                <div class="metric-name">${metricMeta[metricId].title}</div>
+                <details>
+                    <summary>指標定義與說明</summary>
+                    <div class="desc-content">${metricMeta[metricId].desc}</div>
+                </details>
+                <div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>
+                <div class="analysis-section">
+                    <div class="analysis-summary">
+                        <h4>💡 AI 趨勢解讀</h4>
+                        <div class="summary-text">${aiInsight.summary}</div>
+                    </div>
+                    <div class="analysis-bullets">
+                        <h4>📌 數據關鍵點</h4>
+                        <ul class="bullet-list">${aiInsight.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+
+            const ctx = document.getElementById(`chart-${metricId}`).getContext('2d');
+            const labels = mData.map(i => i.date);
+            const values = mData.map(i => i.value);
+
+            if (metricId === 'gross_profit' || metricId === 'net_income') {
+                const marginKey = metricId === 'gross_profit' ? 'gross_margin' : 'net_margin';
+                const marginData = getProcessedData(marginKey).map(i => i.value);
+                const color = metricId === 'gross_profit' ? 'rgba(37, 99, 235, 0.6)' : 'rgba(99, 102, 241, 0.6)';
+                
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: '金額 (M USD)', data: values, backgroundColor: color, yAxisID: 'y', order: 2 },
+                            { 
+                                label: '百分比 (%)', data: marginData, type: 'line', borderColor: '#10b981', 
+                                borderWidth: 3, pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#10b981",
+                                pointRadius: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? 8 : 4, tension: 0.4, yAxisID: 'y1', order: 1 
+                            }
+                        ]
+                    },
+                    options: getChartOptions('M USD', '%', true)
+                });
+            } else {
+                const isBar = ['eps_diluted'].includes(metricId);
+                new Chart(ctx, {
+                    type: isBar ? 'bar' : 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: metricMeta[metricId].title,
+                            data: values,
+                            borderColor: '#2563eb',
+                            backgroundColor: isBar ? 'rgba(37, 99, 235, 0.6)' : 'rgba(37, 99, 235, 0.1)',
+                            fill: !isBar, tension: 0.4,
+                            pointRadius: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? 8 : 4,
+                            pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#2563eb",
+                        }]
+                    },
+                    options: getChartOptions(metricMeta[metricId].unit)
+                });
+            }
+        });
+    });
+}
+
+function getChartOptions(y1Label, y2Label = '', dual = false) {
+    return {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+            y: { beginAtZero: false, title: { display: true, text: y1Label } },
+            y1: dual ? { position: 'right', title: { display: true, text: y2Label }, min: 0 } : { display: false },
+            x: { grid: { display: false } }
+        }
+    };
+}
+
+// 執行啟動
+fetchCloudReport();
+</script>
+</body>
+</html>
