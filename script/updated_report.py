@@ -96,12 +96,28 @@ def run_full_update(symbol):
         # 1. 抓取數據
         final_data_dict = get_financial_data(symbol)
         if not final_data_dict: return
-
-        # 2. AI 分析 (修正模型名稱：將 gemini-2.5-flash 改為 gemini-1.5-flash)
-        print(f"🤖 正在請求 Gemini 生成分析報告...")
-        prompt = f"請分析以下 {symbol} 的財務數據，並以純 JSON 格式回傳。結構包含：one_liner, risks (Array), by_metric (Object)。數據內容：{json.dumps(final_data_dict)}"
         
-        # 修正：目前正式版為 gemini-1.5-flash 或 gemini-2.0-flash
+        # 2. AI 分析
+        print(f"🤖 正在請求 Gemini 生成分析報告...")
+        
+        # 修正後的精確 Prompt
+        prompt = f"""
+        你是一位專業的財務分析師。請分析以下 {symbol} 的財務數據，並嚴格以純 JSON 格式回傳。
+        
+        要求：
+        1. 語言：必須使用『繁體中文』。
+        2. 結構：
+           - "one_liner": 對該公司的財務狀況做一句話總結。
+           - "by_metric": 針對數據中提供的每一項指標（例如 revenue, gross_margin, net_income 等）建立一個物件，結構必須包含：
+             - "summary": 一段 50-100 字的專業分析摘要。
+             - "bullets": 3 個該指標的關鍵趨勢或觀察點（Array of strings）。
+           - "risks": 條列至少兩項主要的財務風險（Array of strings）。
+        
+        數據內容：
+        {json.dumps(final_data_dict)}
+        """
+        
+        # 保持原有的 generate_content 設定
         response = client.models.generate_content(
             model="gemini-2.5-flash", 
             contents=prompt,

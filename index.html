@@ -188,6 +188,14 @@ function renderDashboard(json) {
             const aiInsight = ai.by_metric[metricId];
             if (!mData || !aiInsight) return;
 
+            // 這裡修正為讀取 summary 與 bullets
+            const summaryText = aiInsight.summary || aiInsight; // 相容舊格式或直接顯示
+            const bulletsHtml = aiInsight.bullets 
+                ? `<ul style="margin: 12px 0 0; padding-left: 20px; font-size: 14px; color: #475569;">
+                    ${aiInsight.bullets.map(b => `<li style="margin-bottom: 4px;">${b}</li>`).join('')}
+                   </ul>` 
+                : '';
+
             const card = document.createElement('div');
             card.className = 'metric-card';
             card.innerHTML = `
@@ -200,7 +208,8 @@ function renderDashboard(json) {
                 <div class="analysis-section">
                     <div class="analysis-summary">
                         <h4>💡 AI 趨勢解讀</h4>
-                        <div class="summary-text">${aiInsight}</div>
+                        <div class="summary-text" style="font-weight: 500;">${summaryText}</div>
+                        ${bulletsHtml} 
                     </div>
                 </div>
             `;
