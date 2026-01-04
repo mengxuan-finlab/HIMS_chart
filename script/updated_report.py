@@ -18,7 +18,7 @@ def get_review_list():
     """從 Supabase 抓取所有狀態為 'review' 的任務"""
     print("🔍 正在掃描 Supabase 尋找待處理任務 (status='review')...")
     try:
-        # 必須抓取 user_id，否則後續 upsert 會因為缺少複合鍵而失敗
+        # 修改處：使用 .eq() 精準過濾 'review' 狀態
         res = supabase.table("tracked_stocks") \
             .select("symbol, user_id") \
             .eq("status", "review") \
@@ -27,13 +27,66 @@ def get_review_list():
     except Exception as e:
         print(f"❌ 抓取任務清單失敗: {e}")
         return []
+    
+    
+def safe_fetch(url, params):
+    """安全抓取 API"""
+    try:
+        resp = requests.get(url, params=params, timeout=10).json()
+        if isinstance(resp, list):
+            return resp
+        return []
+    except Exception as e:
+        print(f"⚠️ API 請求異常: {e}")
+        return []
 
 def get_financial_data(symbol):
-    """抓取財務數據 (保持原本邏輯)"""
+    """抓取 16 項核心財務指標"""
     print(f"📦 正在從 FMP 抓取 {symbol} 的數據...")
-    # ... (此處省略 safe_fetch 等獲取數據的過程，保持你原本的 get_financial_data 內容)
-    # 確保回傳 final_data_dict
-    pass 
+    base = "https://financialmodelingprep.com/stable"
+    p = {"symbol": symbol, "apikey": FMP_API_KEY}
+    
+    iq = safe_fetch(f"{base}/income-statement", {**p, "period": "quarter"})
+    ia = safe_fetch(f"{base}/income-statement", {**p, "period": "annual"})
+    bq = safe_fetch(f"{base}/balance-sheet-statement", {**p, "period": "quarter"})
+    ca = safe_fetch(f"{base}/cash-flow-statement", {**p, "period": "annual"})
+    mq = safe_fetch(f"{base}/key-metrics", p)
+    mt = safe_fetch(f"{base}/key-metrics-ttm", p)
+    rq = safe_fetch(f"{base}/ratios", p)
+    rt = safe_fetch(f"{base}/ratios-ttm", p)
+
+    try:
+        data = {
+            "revenue": [{"date": x.get("date"), "value": x.get("revenue", 0)/1e6} for x in iq[:5]],
+            "gross_profit": [{"date": x.get("date"), "value": x.get("grossProfit", 0)/1e6} for x in iq[:5]],
+            "gross_margin": [{"date": x.get("date"), "value": (x.get("grossProfit", 0)/x.get("revenue", 1))*100 if x.get("revenue") else 0} for x in iq[:5]],
+            "net_income": [{"date": x.get("date"), "value": x.get("netIncome", 0)/1e6} for x in iq[:5]],
+            "net_margin": [{"date": x.get("date"), "value": (x.get("netIncome", 0)/x.get("revenue", 1))*100 if x.get("revenue") else 0} for x in iq[:5]],
+            "eps_diluted": [{"date": x.get("date"), "value": x.get("epsdiluted") or x.get("epsDiluted") or 0} for x in ia[:5]],
+            "total_equity": [{"date": x.get("date"), "value": x.get("totalEquity", 0)/1e6} for x in bq[:5]],
+            "current_ratio": [{"date": x.get("date"), "value": x.get("totalCurrentAssets", 0)/x.get("totalCurrentLiabilities", 1) if x.get("totalCurrentLiabilities") else 0} for x in bq[:5]],
+            "long_term_solvency": [{"date": x.get("date"), "value": x.get("totalDebt", 0)/x.get("netCashProvidedByOperatingActivities", 1) if x.get("netCashProvidedByOperatingActivities") else 0} for x in bq[:5]],
+            "operating_cash_flow": [{"date": x.get("date"), "value": x.get("operatingCashFlow", 0)} for x in ca[:5]],
+            "free_cash_flow": [{"date": x.get("date"), "value": x.get("freeCashFlow", 0)} for x in ca[:5]],
+            "capEX_OCF": [{"date": x.get("date"), "value": x.get("capitalExpenditure", 0)/x.get("operatingCashFlow", 1) if x.get("operatingCashFlow") else 0} for x in ca[:5]],
+            "ocf_netincome": [{"date": x.get("date"), "value": x.get("operatingCashFlow", 0)/x.get("netIncome", 1) if x.get("netIncome") else 0} for x in ca[:5]],
+            "roe": [{"date": x.get("date"), "value": x.get("returnOnEquity", 0)} for x in mq[:5]],
+            "roa": [{"date": x.get("date"), "value": x.get("returnOnAssets", 0)} for x in mq[:5]],
+            "pe": [{"date": x.get("date"), "value": x.get("priceToEarningsRatio", 0)} for x in rq[:5]],
+            "peg": [{"date": x.get("date"), "value": x.get("priceToEarningsGrowthRatio", 0)} for x in rq[:5]],
+        }
+
+        if mt and isinstance(mt, list):
+            data["roe"].append({"date": "TTM", "value": mt[0].get("returnOnEquityTTM", 0)})
+            data["roa"].append({"date": "TTM", "value": mt[0].get("returnOnAssetsTTM", 0)})
+        if rt and isinstance(rt, list):
+            data["pe"].append({"date": "TTM", "value": rt[0].get("priceToEarningsRatioTTM", 0)})
+            data["peg"].append({"date": "TTM", "value": rt[0].get("priceToEarningsGrowthRatioTTM", 0)})
+
+        return data
+    except Exception as e:
+        print(f"❌ 封裝數據時出錯: {e}")
+        return None
 
 def run_full_update(task):
     symbol = task['symbol']
@@ -54,15 +107,16 @@ def run_full_update(task):
         1. 語言：必須使用『繁體中文』。
         2. 結構：
            - "one_liner": 對該公司的財務狀況做一句話總結。
-           - "by_metric": 針對數據中提供的指標建立物件，結構包含：
-             - "summary": 50-100 字的專業分析摘要。
-             - "bullets": 3 個該指標的關鍵趨勢或觀察點 (Array)。
-           - "risks": 條列至少兩項主要財務風險 (Array)。
+           - "by_metric": 針對數據中提供的每一項指標建立一個物件，結構必須包含：
+             - "summary": 一段 50-100 字的專業分析摘要。
+             - "bullets": 3 個該指標的關鍵趨勢或觀察點（Array of strings）。
+           - "risks": 條列至少兩項主要的財務風險（Array of strings）。
         
         數據內容：
         {json.dumps(final_data_dict)}
         """
         
+        # ★ 修正 2：改為正式模型名稱 gemini-1.5-flash
         response = client.models.generate_content(
             model="gemini-2.5-flash", 
             contents=prompt,
@@ -81,7 +135,7 @@ def run_full_update(task):
         
         base_url = "https://hims-chart.vercel.app/"
         
-        # 4. 執行精準更新 (對應 user_id + symbol 的複合索引)
+        # ★ 修正 3：執行精準更新 (必須包含 user_id 且對齊複合索引)
         supabase.table("tracked_stocks").upsert(
             {
                 "user_id": user_id, 
@@ -93,7 +147,7 @@ def run_full_update(task):
             on_conflict="user_id, symbol" 
         ).execute()
         
-        print(f"✅ {symbol} 更新成功！狀態已轉為 ready。")
+        print(f"✅ {symbol} 更新成功！數據已寫入。")
         
     except Exception as e:
         print(f"💥 處理 {symbol} 時發生錯誤: {e}")
@@ -105,5 +159,5 @@ if __name__ == "__main__":
     else:
         for task in task_list:
             run_full_update(task)
-            time.sleep(1) # 避免 API 頻率過快
+            time.sleep(1)
     print("✨ 程序執行完畢。")
