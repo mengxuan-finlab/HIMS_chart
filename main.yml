@@ -1,0 +1,34 @@
+name: 財報 AI 自動化分析
+
+on:
+  schedule:
+    # 設定每小時執行一次 (UTC 0 分時執行)
+    - cron: '0 * * * *'
+  # 允許你手動在 GitHub 網頁上點擊按鈕執行
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 檢出專案程式碼
+        uses: actions/checkout@v3
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: 安裝必要套件
+        run: |
+          pip install requests google-genai supabase python-dotenv
+
+      - name: 執行分析腳本
+        # 這裡會自動把你在 GitHub Secrets 設定的金鑰帶入環境變數
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEMINI_API_MAIN: ${{ secrets.GEMINI_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        run: python script/updated_report.py
