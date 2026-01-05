@@ -2,9 +2,9 @@ name: 財報 AI 自動化分析
 
 on:
   schedule:
-    # 設定每小時執行一次 (UTC 0 分時執行)
-    - cron: '0 * * * *'
-  # 允許你手動在 GitHub 網頁上點擊按鈕執行
+    # 設定每 15 分鐘執行一次 (GitHub 免費版最快頻率)
+    - cron: '*/15 * * * *'
+  # 允許手動按按鈕觸發 (方便測試用)
   workflow_dispatch:
 
 jobs:
