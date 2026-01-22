@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>HIMS 財報全自動化分析儀表板</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -156,7 +157,8 @@
 // --- 1. Supabase 配置 (請務必使用你剛才設定好 RLS 的那個專案) ---
 const SUPABASE_URL = "https://zlkexplsleznuebighte.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpsa2V4cGxzbGV6bnVlYmlnaHRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MzAwNjUsImV4cCI6MjA4MTAwNjA2NX0.HPVn3jcN88M4U3-RCVW-YO-b65rDOKv6pxEaVWwbm68"; // 使用你真正的 eyJ... 金鑰
-
+// 💡 初始化 Supabase 客戶端
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- 2. 取得網址參數 ---
 const urlParams = new URLSearchParams(window.location.search);
 const currentSymbol = urlParams.get('symbol') || 'PLTR'; // 預設改為 PLTR 以便測試
@@ -188,21 +190,33 @@ const reportStructure = [
 
 async function fetchCloudReport() {
     try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/tracked_stocks?symbol=eq.${currentSymbol.toUpperCase()}&select=report_json`, {
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-            }
-        });
-        const result = await response.json();
+        // 1. 💡 動態取得目前登入的使用者資訊 (不再寫死 ID)
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-        if (result.length > 0 && result[0].report_json) {
-            renderDashboard(result[0].report_json);
+        if (authError || !user) {
+            console.warn("使用者未登入");
+            document.body.innerHTML = `<main class="page"><h1>🔒 請先登入</h1><p>「懂才抱」需要確認你的身份以顯示專屬分析報告。</p></main>`;
+            return;
+        }
+
+        // 2. 💡 使用取得的 user.id 進行精確查詢
+        // 這會確保 A 絕對不會抓到 B 的資料庫紀錄
+        const { data: result, error: dbError } = await supabase
+            .from('tracked_stocks')
+            .select('report_json')
+            .eq('symbol', currentSymbol.toUpperCase())
+            .eq('user_id', user.id) // 🎯 關鍵：鎖定當前使用者 ID
+            .maybeSingle(); // 確保只取一筆
+
+        if (dbError) throw dbError;
+
+        if (result && result.report_json) {
+            renderDashboard(result.report_json);
         } else {
-            document.body.innerHTML = `<main class="page"><h1>❌ 找不到 ${currentSymbol} 的報告</h1><p>請確認資料庫中是否存在該股票，且狀態為 ready。</p></main>`;
+            document.body.innerHTML = `<main class="page"><h1>❌ 找不到 ${currentSymbol} 的報告</h1><p>請確認是否已新增此股票，或稍等後端 AI 生成資料。</p></main>`;
         }
     } catch (err) {
-        console.error("Supabase 讀取錯誤:", err);
+        console.error("系統讀取錯誤:", err);
     }
 }
 
