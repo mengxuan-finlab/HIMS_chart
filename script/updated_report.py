@@ -2,6 +2,7 @@ import requests, json, os, time
 from google import genai
 from supabase import create_client
 from dotenv import load_dotenv
+from serpapi import GoogleSearch 
 
 # --- 1. 配置區 ---
 load_dotenv()
@@ -9,33 +10,58 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_MAIN") 
 FMP_API_KEY = os.getenv("FMP_API_KEY")
+SERPAPI_KEY = os.getenv("SERPAPI_KEY") 
 
 # 初始化
 client = genai.Client(api_key=GEMINI_API_KEY)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# --- 2. 輔助功能函式 ---
+
 def get_review_list():
-    """從 Supabase 抓取所有狀態為 'review' 的任務"""
-    print("🔍 正在掃描 Supabase 尋找待處理任務 (status='review')...")
+    print("🔍 掃描待處理任務...")
     try:
-        # 修改處：使用 .eq() 精準過濾 'review' 狀態
-        res = supabase.table("tracked_stocks") \
-            .select("symbol, user_id") \
-            .eq("status", "review") \
-            .execute()
-        return res.data 
+        # 1. 先抓出 status='review' 的股票
+        res = supabase.table("tracked_stocks").select("symbol, user_id").eq("status", "review").execute()
+        stocks = res.data
+        
+        # 2. 為每筆資料手動補上方案等級
+        for stock in stocks:
+            user_id = stock['user_id']
+            # 去 profiles 表查該使用者的 plan
+            user_res = supabase.table("profiles").select("plan").eq("id", user_id).single().execute()
+            print(f"DEBUG - 使用者 {user_id} 查詢結果: {user_res.data}")
+            # 存入 stock 物件中，方便後面讀取
+            stock['user_plan'] = user_res.data.get('plan', 'free') if user_res.data else 'free'
+            
+        return stocks
     except Exception as e:
-        print(f"❌ 抓取任務清單失敗: {e}")
+        print(f"❌ 抓取失敗: {e}")
         return []
-    
-    
+
+def get_market_news(symbol):
+    """Pro 專屬：抓取即時市場成因"""
+    print(f"🌐 Pro 功能：搜尋 {symbol} 的市場背景...")
+    params = {
+        "engine": "google",
+        "q": f"{symbol} stock earnings reasons analysis",
+        "api_key": SERPAPI_KEY
+    }
+    try:
+        search = GoogleSearch(params)
+        results = search.get_dict()
+        # 抓取搜尋結果的前 5 條摘要作為 AI 背景
+        snippets = [item.get("snippet", "") for item in results.get("organic_results", [])[:5]]
+        return "\n".join(snippets)
+    except Exception as e:
+        print(f"⚠️ SerpApi 異常: {e}")
+        return ""
+
 def safe_fetch(url, params):
-    """安全抓取 API"""
+    """安全抓取 API 資料"""
     try:
         resp = requests.get(url, params=params, timeout=10).json()
-        if isinstance(resp, list):
-            return resp
-        return []
+        return resp if isinstance(resp, list) else []
     except Exception as e:
         print(f"⚠️ API 請求異常: {e}")
         return []
@@ -46,6 +72,7 @@ def get_financial_data(symbol):
     base = "https://financialmodelingprep.com/stable"
     p = {"symbol": symbol, "apikey": FMP_API_KEY}
     
+    # 抓取各類報表
     iq = safe_fetch(f"{base}/income-statement", {**p, "period": "quarter"})
     ia = safe_fetch(f"{base}/income-statement", {**p, "period": "annual"})
     bq = safe_fetch(f"{base}/balance-sheet-statement", {**p, "period": "quarter"})
@@ -75,48 +102,63 @@ def get_financial_data(symbol):
             "pe": [{"date": x.get("date"), "value": x.get("priceToEarningsRatio", 0)} for x in rq[:5]],
             "peg": [{"date": x.get("date"), "value": x.get("priceToEarningsGrowthRatio", 0)} for x in rq[:5]],
         }
-
-        if mt and isinstance(mt, list):
+        # 加入 TTM 數據
+        if mt:
             data["roe"].append({"date": "TTM", "value": mt[0].get("returnOnEquityTTM", 0)})
             data["roa"].append({"date": "TTM", "value": mt[0].get("returnOnAssetsTTM", 0)})
-        if rt and isinstance(rt, list):
+        if rt:
             data["pe"].append({"date": "TTM", "value": rt[0].get("priceToEarningsRatioTTM", 0)})
             data["peg"].append({"date": "TTM", "value": rt[0].get("priceToEarningsGrowthRatioTTM", 0)})
-
         return data
     except Exception as e:
-        print(f"❌ 封裝數據時出錯: {e}")
+        print(f"❌ 數據封裝出錯: {e}")
         return None
+
+# --- 3. 核心處理邏輯 ---
 
 def run_full_update(task):
     symbol = task['symbol']
     user_id = task['user_id']
-    print(f"🚀 開始處理 {symbol} (User: {user_id})...")
+    # ✅ 只留下這一行，讀取你在 get_review_list 裡面手動塞入的欄位
+    user_plan = task.get('user_plan', 'free')
+    
+    print(f"🚀 處理中: {symbol} (等級: {user_plan})")
     
     try:
-        # 1. 抓取數據
+        # 1. 抓取財務數據
         final_data_dict = get_financial_data(symbol)
         if not final_data_dict: return
         
-        # 2. AI 分析
-        print(f"🤖 正在請求 Gemini 生成分析報告...")
+        # 2. 判斷是否使用 SerpApi (Pro 專屬)
+        market_context = ""
+        if user_plan == "pro":
+            market_context = get_market_news(symbol)
+            
+        # 3. 組合分級 Prompt 指令
+        reasoning_req = ""
+        if user_plan == "pro":
+            reasoning_req = f"請結合以下市場動態背景，深入分析指標變動的『商業成因』：{market_context}"
+        else:
+            reasoning_req = "請在 related_reasons 欄位固定回傳 ['升級 Pro 解鎖深度成因分析']。"
+
         prompt = f"""
-        你是一位專業的財務分析師。請分析以下 {symbol} 的財務數據，並嚴格以純 JSON 格式回傳。
+        你是一位專業財務分析師。請分析 {symbol} 的財務數據並回傳純 JSON。
+        格式要求：
+        - "one_liner": 財務狀況一句話總結
+        - "by_metric": {{
+            "metric_id": {{
+                "summary": "數據解讀摘要",
+                "bullets": ["關鍵趨勢觀察1", "關鍵趨勢觀察2"],
+                "related_reasons": ["核心商業成因分析1", "核心商業成因分析2"] 
+            }}
+        }}
+        - "risks": ["主要的財務風險清單"]
         
-        要求：
-        1. 語言：必須使用『繁體中文』。
-        2. 結構：
-           - "one_liner": 對該公司的財務狀況做一句話總結。
-           - "by_metric": 針對數據中提供的每一項指標建立一個物件，結構必須包含：
-             - "summary": 一段 50-100 字的專業分析摘要。
-             - "bullets": 3 個該指標的關鍵趨勢或觀察點（Array of strings）。
-           - "risks": 條列至少兩項主要的財務風險（Array of strings）。
-        
-        數據內容：
-        {json.dumps(final_data_dict)}
+        分析要求：必須使用繁體中文。{reasoning_req}
+        數據內容：{json.dumps(final_data_dict)}
         """
         
-        # ★ 修正 2：改為正式模型名稱 gemini-1.5-flash
+        # 4. 呼叫 Gemini 2.5
         response = client.models.generate_content(
             model="gemini-2.5-flash", 
             contents=prompt,
@@ -124,30 +166,22 @@ def run_full_update(task):
         )
         ai_analysis = json.loads(response.text)
 
-        # 3. 組合 Payload
-        final_payload = {
+        # 5. 回寫 Supabase 並更新狀態
+        supabase.table("tracked_stocks").upsert({
+            "user_id": user_id, 
             "symbol": symbol.upper(),
-            "as_of": time.strftime("%Y-%m-%d"),
-            "data": final_data_dict,
-            "ai": ai_analysis,
-            "ai_generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
-        
-        base_url = "https://hims-chart.vercel.app/"
-        
-        # ★ 修正 3：執行精準更新 (必須包含 user_id 且對齊複合索引)
-        supabase.table("tracked_stocks").upsert(
-            {
-                "user_id": user_id, 
+            "report_json": {
                 "symbol": symbol.upper(),
-                "report_json": final_payload,
-                "status": "ready",
-                "report_url": f"{base_url}?symbol={symbol.upper()}"
+                "as_of": time.strftime("%Y-%m-%d"),
+                "data": final_data_dict,
+                "ai": ai_analysis,
+                "user_plan": user_plan
             },
-            on_conflict="user_id, symbol" 
-        ).execute()
+            "status": "ready",
+            "report_url": f"https://hims-chart.vercel.app/?symbol={symbol.upper()}"
+        }, on_conflict="user_id, symbol").execute()
         
-        print(f"✅ {symbol} 更新成功！數據已寫入。")
+        print(f"✅ {symbol} 更新成功。")
         
     except Exception as e:
         print(f"💥 處理 {symbol} 時發生錯誤: {e}")
@@ -155,9 +189,9 @@ def run_full_update(task):
 if __name__ == "__main__":
     task_list = get_review_list()
     if not task_list:
-        print("☕ 目前沒有待處理任務。")
+        print("☕ 目前沒有待處理任務 (status='review')。")
     else:
         for task in task_list:
             run_full_update(task)
-            time.sleep(1)
+            time.sleep(1) # 避免 API 頻率限制
     print("✨ 程序執行完畢。")

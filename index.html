@@ -85,6 +85,54 @@
       letter-spacing: 0.05em;
     }
     .summary-text { font-size: 15px; color: #334155; line-height: 1.8; }
+
+    /* 新增：成因分析區塊樣式 */
+    .reason-section {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 12px;
+      background: #f0f9ff; /* Pro 版的藍色背景 */
+      border: 1px solid #bae6fd;
+    }
+    
+    .reason-section.locked {
+      background: #f8fafc; /* 免費版的灰色背景 */
+      border: 1px dashed #cbd5e1;
+    }
+
+    .reason-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0369a1;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+    }
+
+    .locked .reason-title {
+      color: #64748b;
+    }
+
+    .reason-list {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 14px;
+      color: #334155;
+    }
+
+    .lock-text {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+
+    .upgrade-link {
+      color: var(--primary);
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -188,13 +236,36 @@ function renderDashboard(json) {
             const aiInsight = ai.by_metric[metricId];
             if (!mData || !aiInsight) return;
 
-            // 這裡修正為讀取 summary 與 bullets
-            const summaryText = aiInsight.summary || aiInsight; // 相容舊格式或直接顯示
+            const summaryText = aiInsight.summary || aiInsight;
             const bulletsHtml = aiInsight.bullets 
                 ? `<ul style="margin: 12px 0 0; padding-left: 20px; font-size: 14px; color: #475569;">
                     ${aiInsight.bullets.map(b => `<li style="margin-bottom: 4px;">${b}</li>`).join('')}
                    </ul>` 
                 : '';
+
+            // --- 重點修改：處理 Pro 專屬成因分析 ---
+            // --- 修改後的成因分析區塊 ---
+            const reasons = aiInsight.related_reasons || [];
+            const isLocked = reasons.some(r => r.includes("升級 Pro 解鎖深度成因分析"));
+
+            // 使用 class 替代 inline styles，提高維護性
+            const reasonsHtml = `
+                <div class="reason-section ${isLocked ? 'locked' : ''}">
+                    <div class="reason-title">
+                        ${isLocked ? '🔒 深度成因分析 (Pro 專屬)' : '🎯 核心歸因分析'}
+                    </div>
+                    ${isLocked ? 
+                        `<div class="lock-text">
+                            此功能結合 AI 即時搜尋，解析數據背後的真實商業成因。<br>
+                            <a href="/pricing" class="upgrade-link">立即升級 Pro 查看深度洞察 →</a>
+                        </div>` :
+                        `<ul class="reason-list">
+                            ${reasons.map(r => `<li>${r}</li>`).join('')}
+                        </ul>`
+                    }
+                </div>
+            `;
+            // ------------------------------------
 
             const card = document.createElement('div');
             card.className = 'metric-card';
@@ -210,11 +281,12 @@ function renderDashboard(json) {
                         <h4>💡 AI 趨勢解讀</h4>
                         <div class="summary-text" style="font-weight: 500;">${summaryText}</div>
                         ${bulletsHtml} 
-                    </div>
+                        ${reasonsHtml} </div>
                 </div>
             `;
             container.appendChild(card);
 
+            // ... 後續 Chart.js 初始化代碼保持不變 ...
             const ctx = document.getElementById(`chart-${metricId}`).getContext('2d');
             const labels = mData.map(i => i.date);
             const values = mData.map(i => i.value);
