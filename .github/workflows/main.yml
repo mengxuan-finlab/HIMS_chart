@@ -22,7 +22,7 @@ jobs:
 
       - name: 安裝必要套件
         run: |
-          pip install requests google-genai supabase python-dotenv
+          pip install requests google-genai supabase python-dotenv google-search-results
 
       - name: 執行分析腳本
         # 這裡會自動把你在 GitHub Secrets 設定的金鑰帶入環境變數
