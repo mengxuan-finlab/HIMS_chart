@@ -207,15 +207,34 @@ async function fetchCloudReport() {
 }
 
 function renderDashboard(json) {
+    // --- 1. 資料安全性防護 ---
+    if (!json || !json.data || !json.ai) {
+        console.error("載入的 JSON 格式不正確");
+        return;
+    }
+
     const data = json.data;
     const ai = json.ai;
 
+    // --- 2. 更新標題與時間 (修正點：增加日期防護避免崩潰) ---
     document.querySelector('.page-title').innerText = `${json.symbol} 財報分析儀表板`;
-    document.getElementById('update-info').innerText = `數據截止: ${json.as_of} | AI 生成於: ${json.ai_generated_at.split('T')[0]}`;
-    document.getElementById('one-liner').innerText = ai.one_liner;
-    document.getElementById('risk-container').innerHTML = ai.risks.map(r => `<div><span class="risk-tag">RISK</span> <span style="font-size:14px; color:#475569;">${r}</span></div>`).join('');
+    
+    // 如果 ai_generated_at 缺失，改用 as_of 作為備案
+    const rawDate = json.ai_generated_at || json.as_of || "2026-01-01";
+    const genDate = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+    document.getElementById('update-info').innerText = `數據截止: ${json.as_of} | AI 生成於: ${genDate}`;
+    
+    document.getElementById('one-liner').innerText = ai.one_liner || "";
+    
+    // 更新風險標籤
+    const riskContainer = document.getElementById('risk-container');
+    if (ai.risks) {
+        riskContainer.innerHTML = ai.risks.map(r => `<div><span class="risk-tag">RISK</span> <span style="font-size:14px; color:#475569;">${r}</span></div>`).join('');
+    }
 
+    // --- 3. 初始化容器 ---
     const container = document.getElementById('dynamic-content');
+    container.innerHTML = ''; 
 
     const getProcessedData = (id) => {
         const raw = data[id];
@@ -225,6 +244,7 @@ function renderDashboard(json) {
         return ttm ? [...history, ttm] : history;
     };
 
+    // --- 4. 開始渲染各個區塊 ---
     reportStructure.forEach(sec => {
         const h2 = document.createElement('h2');
         h2.className = 'section-title';
@@ -233,22 +253,26 @@ function renderDashboard(json) {
 
         sec.metrics.forEach(metricId => {
             const mData = getProcessedData(metricId);
-            const aiInsight = ai.by_metric[metricId];
+            
+            // --- 修正點：對齊資料鍵值 (Gross Profit vs Gross Margin) ---
+            let aiInsight = ai.by_metric[metricId];
+            // 如果 ID 是 gross_profit 但 JSON 裡叫 gross_margin，自動對齊
+            if (!aiInsight && metricId === 'gross_profit') aiInsight = ai.by_metric['gross_margin'];
+            if (!aiInsight && metricId === 'net_income') aiInsight = ai.by_metric['net_margin'];
+
             if (!mData || !aiInsight) return;
 
-            const summaryText = aiInsight.summary || aiInsight;
+            const summaryText = aiInsight.summary || (typeof aiInsight === 'string' ? aiInsight : "");
             const bulletsHtml = aiInsight.bullets 
                 ? `<ul style="margin: 12px 0 0; padding-left: 20px; font-size: 14px; color: #475569;">
                     ${aiInsight.bullets.map(b => `<li style="margin-bottom: 4px;">${b}</li>`).join('')}
                    </ul>` 
                 : '';
 
-            // --- 重點修改：處理 Pro 專屬成因分析 ---
-            // --- 修改後的成因分析區塊 ---
+            // --- 處理 Pro 專屬成因分析 ---
             const reasons = aiInsight.related_reasons || [];
-            const isLocked = reasons.some(r => r.includes("升級 Pro 解鎖深度成因分析"));
+            const isLocked = reasons.some(r => typeof r === 'string' && r.includes("升級 Pro 解鎖深度成因分析"));
 
-            // 使用 class 替代 inline styles，提高維護性
             const reasonsHtml = `
                 <div class="reason-section ${isLocked ? 'locked' : ''}">
                     <div class="reason-title">
@@ -256,8 +280,8 @@ function renderDashboard(json) {
                     </div>
                     ${isLocked ? 
                         `<div class="lock-text">
-                            此功能結合 AI 即時搜尋，解析數據背後的真實商業成因。<br>
-                            <a href="/pricing" class="upgrade-link">立即升級 Pro 查看深度洞察 →</a>
+                            結合 AI 即時搜尋，解析數據背後的真實商業成因。<br>
+                            <a href="#" class="upgrade-link">立即升級 Pro 查看深度洞察 →</a>
                         </div>` :
                         `<ul class="reason-list">
                             ${reasons.map(r => `<li>${r}</li>`).join('')}
@@ -265,15 +289,15 @@ function renderDashboard(json) {
                     }
                 </div>
             `;
-            // ------------------------------------
 
+            // --- 生成卡片 HTML ---
             const card = document.createElement('div');
             card.className = 'metric-card';
             card.innerHTML = `
-                <div class="metric-name">${metricMeta[metricId].title}</div>
+                <div class="metric-name">${metricMeta[metricId]?.title || metricId}</div>
                 <details>
                     <summary>指標定義與說明</summary>
-                    <div class="desc-content">${metricMeta[metricId].desc}</div>
+                    <div class="desc-content">${metricMeta[metricId]?.desc || ""}</div>
                 </details>
                 <div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>
                 <div class="analysis-section">
@@ -281,19 +305,20 @@ function renderDashboard(json) {
                         <h4>💡 AI 趨勢解讀</h4>
                         <div class="summary-text" style="font-weight: 500;">${summaryText}</div>
                         ${bulletsHtml} 
-                        ${reasonsHtml} </div>
+                        ${reasonsHtml} 
+                    </div>
                 </div>
             `;
             container.appendChild(card);
 
-            // ... 後續 Chart.js 初始化代碼保持不變 ...
+            // --- 初始化 Chart.js ---
             const ctx = document.getElementById(`chart-${metricId}`).getContext('2d');
             const labels = mData.map(i => i.date);
             const values = mData.map(i => i.value);
 
             if (metricId === 'gross_profit' || metricId === 'net_income') {
                 const marginKey = metricId === 'gross_profit' ? 'gross_margin' : 'net_margin';
-                const marginData = getProcessedData(marginKey).map(i => i.value);
+                const marginData = getProcessedData(marginKey);
                 
                 new Chart(ctx, {
                     type: 'bar',
@@ -302,7 +327,9 @@ function renderDashboard(json) {
                         datasets: [
                             { label: '金額 (M USD)', data: values, backgroundColor: 'rgba(37, 99, 235, 0.6)', yAxisID: 'y', order: 2 },
                             { 
-                                label: '百分比 (%)', data: marginData, type: 'line', borderColor: '#10b981', 
+                                label: '百分比 (%)', 
+                                data: marginData ? marginData.map(i => i.value) : [], 
+                                type: 'line', borderColor: '#10b981', 
                                 borderWidth: 3, pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#10b981",
                                 pointRadius: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? 8 : 4, tension: 0.4, yAxisID: 'y1', order: 1 
                             }
@@ -317,7 +344,7 @@ function renderDashboard(json) {
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: metricMeta[metricId].title,
+                            label: metricMeta[metricId]?.title || metricId,
                             data: values,
                             borderColor: '#2563eb',
                             backgroundColor: isBar ? 'rgba(37, 99, 235, 0.6)' : 'rgba(37, 99, 235, 0.1)',
@@ -326,7 +353,7 @@ function renderDashboard(json) {
                             pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#2563eb",
                         }]
                     },
-                    options: getChartOptions(metricMeta[metricId].unit)
+                    options: getChartOptions(metricMeta[metricId]?.unit || "")
                 });
             }
         });
