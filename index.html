@@ -190,7 +190,20 @@ const reportStructure = [
 
 async function fetchCloudReport() {
     try {
-        // 🎯 修正一：改為 supabaseClient
+        // 1. 🎯 核心修改：從網址抓取 Token 並「手動登入」
+        const urlParams = new URLSearchParams(window.location.search);
+        const access = urlParams.get('access_token');
+        const refresh = urlParams.get('refresh_token');
+
+        // 如果有傳 Token 過來，就先用它設定 Session
+        if (access && refresh) {
+            await supabaseClient.auth.setSession({
+                access_token: access,
+                refresh_token: refresh
+            });
+        }
+
+        // 2. 接下來才是原本的邏輯
         const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
         if (authError || !user) {
@@ -199,7 +212,7 @@ async function fetchCloudReport() {
             return;
         }
 
-        // 🎯 修正二：改為 supabaseClient
+        // 3. 抓取資料庫（使用 user.id）
         const { data: result, error: dbError } = await supabaseClient
             .from('tracked_stocks')
             .select('report_json')
