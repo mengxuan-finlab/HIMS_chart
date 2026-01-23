@@ -190,8 +190,8 @@ const reportStructure = [
 
 async function fetchCloudReport() {
     try {
-        // 1. 💡 動態取得目前登入的使用者資訊 (不再寫死 ID)
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        // 🎯 修正一：改為 supabaseClient
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
         if (authError || !user) {
             console.warn("使用者未登入");
@@ -199,14 +199,13 @@ async function fetchCloudReport() {
             return;
         }
 
-        // 2. 💡 使用取得的 user.id 進行精確查詢
-        // 這會確保 A 絕對不會抓到 B 的資料庫紀錄
-        const { data: result, error: dbError } = await supabase
+        // 🎯 修正二：改為 supabaseClient
+        const { data: result, error: dbError } = await supabaseClient
             .from('tracked_stocks')
             .select('report_json')
             .eq('symbol', currentSymbol.toUpperCase())
-            .eq('user_id', user.id) // 🎯 關鍵：鎖定當前使用者 ID
-            .maybeSingle(); // 確保只取一筆
+            .eq('user_id', user.id) 
+            .maybeSingle(); 
 
         if (dbError) throw dbError;
 
