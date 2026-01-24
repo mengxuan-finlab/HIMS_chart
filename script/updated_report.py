@@ -143,18 +143,26 @@ def run_full_update(task):
 
         prompt = f"""
         你是一位專業財務分析師。請分析 {symbol} 的財務數據並回傳純 JSON。
+
+        ⚠️ 重要要求：請務必針對以下指定的 ID 分別提供分析，不得合併、更名或遺漏：
+        1. 損益類：revenue, gross_profit, net_income, eps_diluted
+        2. 負債類：total_equity, current_ratio, long_term_solvency
+        3. 現金流：operating_cash_flow, free_cash_flow, capEX_OCF, ocf_netincome
+        4. 估值類：roe, roa, pe, peg
+
         格式要求：
         - "one_liner": 財務狀況一句話總結
         - "by_metric": {{
-            "metric_id": {{
+            "每個指定的 ID": {{
                 "summary": "數據解讀摘要",
-                "bullets": ["關鍵趨勢觀察1", "關鍵趨勢觀察2"],
-                "related_reasons": ["核心商業成因分析1", "核心商業成因分析2"] 
+                "bullets": ["趨勢觀察1", "趨勢觀察2", "趨勢觀察3"],
+                "related_reasons": ["成因分析1", "成因分析2", "成因分析3"]
             }}
         }}
         - "risks": ["主要的財務風險清單"]
         
-        分析要求：必須使用繁體中文。{reasoning_req}
+        分析要求：必須使用繁體中文。即便數據為 0 或變動極小，也請針對該指標提供簡短解讀。
+        {reasoning_req}
         數據內容：{json.dumps(final_data_dict)}
         """
         
