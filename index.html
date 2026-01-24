@@ -309,8 +309,20 @@ function renderDashboard(json) {
                 }
             }
 
-            // 這樣之後，即便沒找到精確 ID，只要大類別有資料，圖表就會跑出來了
-            if (!mData || !aiInsight) return;
+            // 🎯 只要有數據 (mData) 就一定要畫圖，不能 return 掉
+            if (!mData) return; 
+
+            // 🎯 如果經過所有對齊邏輯後還是 null (就像現在 HIMS 的負債表)
+            // 我們就補上一個預設的物件，這樣圖表就會出來，只是文字會顯示預設內容
+            if (!aiInsight) {
+                aiInsight = {
+                    summary: "AI 目前針對此指標尚無獨立解讀，請參考圖表數據趨勢。",
+                    bullets: [],
+                    related_reasons: []
+                };
+            }
+
+            // 移除原本那行：if (!mData || !aiInsight) return;
 
             const summaryText = aiInsight.summary || (typeof aiInsight === 'string' ? aiInsight : "");
             const bulletsHtml = aiInsight.bullets 
