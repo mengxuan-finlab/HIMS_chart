@@ -281,11 +281,29 @@ function renderDashboard(json) {
             const mData = getProcessedData(metricId);
             
             // --- 修正點：對齊資料鍵值 (Gross Profit vs Gross Margin) ---
+            // 在 renderDashboard 迴圈內部找到這一段並替換
             let aiInsight = ai.by_metric[metricId];
-            // 如果 ID 是 gross_profit 但 JSON 裡叫 gross_margin，自動對齊
-            if (!aiInsight && metricId === 'gross_profit') aiInsight = ai.by_metric['gross_margin'];
-            if (!aiInsight && metricId === 'net_income') aiInsight = ai.by_metric['net_margin'];
 
+            // 🎯 自動對齊邏輯：如果找不到精確 ID，就去對應的大類別找
+            if (!aiInsight) {
+                // 1. 處理損益表名稱不符
+                if (metricId === 'gross_profit') aiInsight = ai.by_metric['gross_margin'];
+                if (metricId === 'net_income') aiInsight = ai.by_metric['net_income_and_margin'] || ai.by_metric['net_margin'];
+
+                // 2. 處理 HIMS 把現金流指標合併的情況
+                const cashFlowMetrics = ['operating_cash_flow', 'free_cash_flow', 'capEX_OCF', 'ocf_netincome'];
+                if (cashFlowMetrics.includes(metricId)) {
+                    aiInsight = ai.by_metric['cash_flow']; 
+                }
+
+                // 3. 處理 HIMS 把估值指標合併的情況
+                const valuationMetrics = ['roe', 'roa', 'pe', 'peg'];
+                if (valuationMetrics.includes(metricId)) {
+                    aiInsight = ai.by_metric['valuation_metrics'];
+                }
+            }
+
+            // 這樣之後，即便沒找到精確 ID，只要大類別有資料，圖表就會跑出來了
             if (!mData || !aiInsight) return;
 
             const summaryText = aiInsight.summary || (typeof aiInsight === 'string' ? aiInsight : "");
