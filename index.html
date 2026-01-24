@@ -301,6 +301,12 @@ function renderDashboard(json) {
                 if (valuationMetrics.includes(metricId)) {
                     aiInsight = ai.by_metric['valuation_metrics'];
                 }
+                // 🎯 4. 處理「資產負債與償債」類 (預留對應)
+                const solvencyGroup = ['total_equity', 'current_ratio', 'long_term_solvency'];
+                if (solvencyGroup.includes(metricId)) {
+                    // 嘗試抓取可能的大類別名稱
+                    aiInsight = ai.by_metric['balance_sheet'] || ai.by_metric['solvency'] || ai.by_metric['financial_condition'];
+                }
             }
 
             // 這樣之後，即便沒找到精確 ID，只要大類別有資料，圖表就會跑出來了
