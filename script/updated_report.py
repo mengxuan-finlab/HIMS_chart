@@ -83,6 +83,7 @@ def get_financial_data(symbol):
     rt = safe_fetch(f"{base}/ratios-ttm", p)
 
     try:
+        ca_cash_map = {x['date']: x.get('operatingCashFlow', 0) for x in ca}
         data = {
             "revenue": [{"date": x.get("date"), "value": x.get("revenue", 0)/1e6} for x in iq[:5]],
             "gross_profit": [{"date": x.get("date"), "value": x.get("grossProfit", 0)/1e6} for x in iq[:5]],
@@ -92,7 +93,16 @@ def get_financial_data(symbol):
             "eps_diluted": [{"date": x.get("date"), "value": x.get("epsdiluted") or x.get("epsDiluted") or 0} for x in ia[:5]],
             "total_equity": [{"date": x.get("date"), "value": x.get("totalEquity", 0)/1e6} for x in bq[:5]],
             "current_ratio": [{"date": x.get("date"), "value": x.get("totalCurrentAssets", 0)/x.get("totalCurrentLiabilities", 1) if x.get("totalCurrentLiabilities") else 0} for x in bq[:5]],
-            "long_term_solvency": [{"date": x.get("date"), "value": x.get("totalDebt", 0)/x.get("netCashProvidedByOperatingActivities", 1) if x.get("netCashProvidedByOperatingActivities") else 0} for x in bq[:5]],
+            #  這裡插入你的跨表長期償債能力邏輯 ---
+            "long_term_solvency": [
+                {
+                    "date": b.get("date"), 
+                    # 分子：從 bq 拿總債務 (這裡就有數據了！)
+                    # 分母：去剛才做好的 ca_cash_map 根據日期拿現金流
+                    "value": b.get("totalDebt", 0) / ca_cash_map.get(b.get("date"), 1) 
+                    if ca_cash_map.get(b.get("date"), 0) != 0 else 0
+                } for b in bq[:5]
+            ],
             "operating_cash_flow": [{"date": x.get("date"), "value": x.get("operatingCashFlow", 0)} for x in ca[:5]],
             "free_cash_flow": [{"date": x.get("date"), "value": x.get("freeCashFlow", 0)} for x in ca[:5]],
             "capEX_OCF": [{"date": x.get("date"), "value": x.get("capitalExpenditure", 0)/x.get("operatingCashFlow", 1) if x.get("operatingCashFlow") else 0} for x in ca[:5]],
