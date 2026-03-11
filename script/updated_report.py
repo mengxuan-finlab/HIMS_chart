@@ -152,47 +152,28 @@ def run_full_update(task):
             reasoning_req = "請在 related_reasons 欄位固定回傳 ['升級 Pro 解鎖深度成因分析']。"
 
         prompt = f"""
-        你是一位財務資料整理助手。請根據 {symbol} 的財務數據進行客觀描述，並回傳純 JSON。
+        你是一位專業財務分析師。請分析 {symbol} 的財務數據並回傳純 JSON。
 
-        ⚠️ 重要要求：請務必針對以下指定的 ID 分別提供內容，不得合併、更名或遺漏：
+        ⚠️ 重要要求：請務必針對以下指定的 ID 分別提供分析，不得合併、更名或遺漏：
         1. 損益類：revenue, gross_profit, net_income, eps_diluted
         2. 負債類：total_equity, current_ratio, long_term_solvency
         3. 現金流：operating_cash_flow, free_cash_flow, capEX_OCF, ocf_netincome
         4. 估值類：roe, roa, pe, peg
 
-        ⚠️ 語氣規則（必須遵守）：
-        - 僅可描述數據的水準、方向、變化與彼此關聯
-        - 不得提供投資建議、買賣建議、操作建議或主觀推薦
-        - 不得使用帶有評價性的語句，例如「強勁、疲弱、健康、危險、便宜、高估、低估、優秀、惡化、樂觀、悲觀」
-        - 可使用中性描述，例如「呈現上升趨勢」「位於較高區間」「變動幅度有限」「與前期相比差異不大」
-        - 若資料不足、數值為 0 或變動極小，請直接描述資料特徵，不得延伸推論
-
-        ⚠️ 結構規則（必須遵守）：
-        - 每個指定 ID 都必須出現在 by_metric 中
-        - 每個指定 ID 都必須包含 summary、bullets、related_reasons
-        - bullets 必須剛好 3 項
-        - related_reasons 必須剛好 3 項
-        - 若資料不足以支持 3 個不同 related_reasons，仍須補滿 3 項，並以「資料不足以說明」補足
-
         格式要求：
-        - "one_liner": 財務狀況一句話總結（僅可用客觀描述）
+        - "one_liner": 財務狀況一句話總結
         - "by_metric": {{
             "每個指定的 ID": {{
-                "summary": "數據解讀摘要（需為中性描述）",
+                "summary": "數據解讀摘要",
                 "bullets": ["趨勢觀察1", "趨勢觀察2", "趨勢觀察3"],
                 "related_reasons": ["成因分析1", "成因分析2", "成因分析3"]
             }}
         }}
-        - "risks": ["主要的財務風險清單（僅可描述不確定性、波動來源或資料限制，不得給建議）"]
-
-        分析要求：必須使用繁體中文。即便數據為 0 或變動極小，也請針對該指標提供簡短客觀描述。
-
-        ⚠️ 輸出限制：
-        - 僅輸出 JSON
-        - 不得輸出任何開場白或額外說明文字
-
+        - "risks": ["主要的財務風險清單"]
+        
+        分析要求：必須使用繁體中文。即便數據為 0 或變動極小，也請針對該指標提供簡短解讀。
         {reasoning_req}
-        數據內容：{json.dumps(final_data_dict, ensure_ascii=False)}
+        數據內容：{json.dumps(final_data_dict)}
         """
         
         # 4. 呼叫 Gemini 2.5
