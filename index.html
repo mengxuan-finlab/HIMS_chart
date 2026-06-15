@@ -52,6 +52,75 @@
       margin: 60px 0 24px;
       padding-bottom: 12px;
       border-bottom: 2px solid var(--card-border);
+      scroll-margin-top: 24px;
+    }
+
+    .statement-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+      margin: 0 0 56px;
+    }
+
+    .statement-card {
+      display: block;
+      min-height: 210px;
+      padding: 24px;
+      color: inherit;
+      text-decoration: none;
+      background: #fff;
+      border: 1px solid var(--card-border);
+      border-top: 5px solid var(--statement-color);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .statement-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.11);
+    }
+
+    .statement-label {
+      color: var(--statement-color);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    .statement-card h2 {
+      margin: 6px 0 8px;
+      font-size: 22px;
+    }
+
+    .statement-card p {
+      min-height: 42px;
+      margin: 0 0 16px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .statement-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .statement-metric {
+      padding: 5px 9px;
+      color: #334155;
+      background: #f1f5f9;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .statement-link {
+      display: block;
+      margin-top: 18px;
+      color: var(--statement-color);
+      font-size: 13px;
+      font-weight: 700;
     }
 
     .metric-card {
@@ -134,6 +203,16 @@
       display: inline-block;
       margin-top: 8px;
     }
+
+    @media (max-width: 780px) {
+      main.page { padding: 36px 16px 72px; }
+      .page-title { font-size: 30px; }
+      .statement-grid { grid-template-columns: 1fr; }
+      .statement-card { min-height: auto; }
+      .statement-card p { min-height: auto; }
+      .metric-card { padding: 22px 16px; }
+      .chart-container { height: 300px; }
+    }
   </style>
 </head>
 <body>
@@ -182,10 +261,36 @@ const metricMeta = {
 };
 
 const reportStructure = [
-    { section: "損益表指標", metrics: ["revenue", "gross_profit", "net_income", "eps_diluted"] },
-    { section: "資產負債與償債", metrics: ["total_equity", "current_ratio", "long_term_solvency"] },
-    { section: "現金流量分析", metrics: ["operating_cash_flow", "free_cash_flow", "capEX_OCF", "ocf_netincome"] },
-    { section: "估值與回報", metrics: ["roe", "roa", "pe", "peg"] }
+    {
+        id: "income-statement",
+        section: "損益表",
+        label: "INCOME STATEMENT",
+        desc: "了解公司賺多少、成本多少，以及最後留下多少利潤。",
+        color: "#2563eb",
+        metrics: ["revenue", "gross_profit", "net_income", "eps_diluted"]
+    },
+    {
+        id: "balance-sheet",
+        section: "資產負債表",
+        label: "BALANCE SHEET",
+        desc: "檢視公司的資產底子、股東權益與短長期償債能力。",
+        color: "#7c3aed",
+        metrics: ["total_equity", "current_ratio", "long_term_solvency"]
+    },
+    {
+        id: "cash-flow-statement",
+        section: "現金流量表",
+        label: "CASH FLOW STATEMENT",
+        desc: "判斷公司實際產生現金的能力，以及資本支出的負擔。",
+        color: "#059669",
+        metrics: ["operating_cash_flow", "free_cash_flow", "capEX_OCF", "ocf_netincome"]
+    },
+    {
+        id: "valuation",
+        section: "估值與回報",
+        metrics: ["roe", "roa", "pe", "peg"],
+        isSupplementary: true
+    }
 ];
 
 async function fetchCloudReport() {
@@ -262,6 +367,27 @@ function renderDashboard(json) {
     const container = document.getElementById('dynamic-content');
     container.innerHTML = ''; 
 
+    const statementGrid = document.createElement('div');
+    statementGrid.className = 'statement-grid';
+    statementGrid.innerHTML = reportStructure
+        .filter(sec => !sec.isSupplementary)
+        .map(sec => `
+            <a class="statement-card" href="#${sec.id}" style="--statement-color: ${sec.color};">
+                <span class="statement-label">${sec.label}</span>
+                <h2>${sec.section}</h2>
+                <p>${sec.desc}</p>
+                <div class="statement-metrics">
+                    ${sec.metrics.map(metricId => `
+                        <span class="statement-metric">
+                            ${(metricMeta[metricId]?.title || metricId).split(' (')[0]}
+                        </span>
+                    `).join('')}
+                </div>
+                <span class="statement-link">查看完整分析 ↓</span>
+            </a>
+        `).join('');
+    container.appendChild(statementGrid);
+
     const getProcessedData = (id) => {
         const raw = data[id];
         if (!raw) return null;
@@ -274,6 +400,7 @@ function renderDashboard(json) {
     reportStructure.forEach(sec => {
         const h2 = document.createElement('h2');
         h2.className = 'section-title';
+        h2.id = sec.id;
         h2.innerText = sec.section;
         container.appendChild(h2);
 
