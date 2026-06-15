@@ -133,6 +133,31 @@
       font-weight: 700;
     }
 
+    .supplementary-nav {
+      display: flex;
+      justify-content: flex-end;
+      margin: -36px 0 40px;
+    }
+
+    .supplementary-button {
+      padding: 10px 16px;
+      color: #475569;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      background: #f8fafc;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .supplementary-button:hover,
+    .supplementary-button.active {
+      color: #c2410c;
+      background: #fff7ed;
+      border-color: #fb923c;
+    }
+
     .report-panel {
       display: none;
     }
@@ -234,6 +259,8 @@
       .statement-grid { grid-template-columns: 1fr; }
       .statement-card { min-height: auto; }
       .statement-card p { min-height: auto; }
+      .supplementary-nav { justify-content: stretch; margin-top: -36px; }
+      .supplementary-button { width: 100%; }
       .metric-card { padding: 22px 16px; }
       .chart-container { height: 300px; }
     }
@@ -312,6 +339,9 @@ const reportStructure = [
     {
         id: "valuation",
         section: "估值與回報",
+        label: "VALUATION & RETURNS",
+        desc: "補充檢視獲利效率與市場估值，包含 ROE、ROA、P/E 與 PEG。",
+        color: "#ea580c",
         metrics: ["roe", "roa", "pe", "peg"],
         isSupplementary: true
     }
@@ -417,6 +447,20 @@ function renderDashboard(json) {
         `).join('');
     container.appendChild(statementGrid);
 
+    const supplementarySection = reportStructure.find(sec => sec.isSupplementary);
+    const supplementaryNav = document.createElement('div');
+    supplementaryNav.className = 'supplementary-nav';
+    supplementaryNav.innerHTML = `
+        <button
+            type="button"
+            class="supplementary-button"
+            data-report-target="${supplementarySection.id}"
+        >
+            查看估值與回報：ROE、ROA、P/E、PEG
+        </button>
+    `;
+    container.appendChild(supplementaryNav);
+
     const getProcessedData = (id) => {
         const raw = data[id];
         if (!raw) return null;
@@ -426,7 +470,7 @@ function renderDashboard(json) {
     };
 
     // --- 4. 開始渲染各個區塊 ---
-    reportStructure.filter(sec => !sec.isSupplementary).forEach((sec, sectionIndex) => {
+    reportStructure.forEach((sec, sectionIndex) => {
         const panel = document.createElement('section');
         panel.className = `report-panel ${sectionIndex === 0 ? 'active' : ''}`;
         panel.id = sec.id;
@@ -582,7 +626,12 @@ function renderDashboard(json) {
 
     });
 
-    statementGrid.querySelectorAll('.statement-card').forEach(button => {
+    const reportButtons = [
+        ...statementGrid.querySelectorAll('.statement-card'),
+        supplementaryNav.querySelector('.supplementary-button')
+    ];
+
+    reportButtons.forEach(button => {
         button.addEventListener('click', () => {
             const targetId = button.dataset.reportTarget;
 
@@ -592,6 +641,8 @@ function renderDashboard(json) {
                 card.querySelector('.statement-link').innerText =
                     isActive ? '目前顯示中' : '點擊切換查看';
             });
+            supplementaryNav.querySelector('.supplementary-button')
+                .classList.toggle('active', targetId === supplementarySection.id);
 
             container.querySelectorAll('.report-panel').forEach(panel => {
                 panel.classList.toggle('active', panel.id === targetId);
