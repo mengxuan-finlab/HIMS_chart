@@ -236,6 +236,49 @@
       font-weight: 700;
     }
 
+    .focus-quick-nav {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 14px 16px;
+      margin: 0 0 20px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 12px;
+    }
+
+    .focus-quick-nav strong {
+      margin-right: 4px;
+      color: #9a3412;
+      font-size: 14px;
+    }
+
+    .focus-quick-button,
+    .focus-back-button {
+      padding: 7px 10px;
+      color: #475569;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      background: #fff;
+      border: 1px solid #fdba74;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .focus-quick-button:hover,
+    .focus-quick-button.current {
+      color: #c2410c;
+      background: #ffedd5;
+      border-color: #f97316;
+    }
+
+    .focus-back-button {
+      margin-left: auto;
+      color: #9a3412;
+    }
+
     @keyframes panel-in {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
@@ -332,6 +375,7 @@
       .supplementary-nav { justify-content: stretch; margin-top: -36px; }
       .supplementary-button { width: 100%; }
       .focus-list { grid-template-columns: 1fr; }
+      .focus-back-button { width: 100%; margin-left: 0; }
       .metric-card { padding: 22px 16px; }
       .chart-container { height: 300px; }
     }
@@ -685,6 +729,28 @@ function renderDashboard(json) {
         h2.className = 'section-title';
         h2.innerText = sec.section;
         panel.appendChild(h2);
+
+        const focusItemsInSection = focusGuide.items.filter(item => item.sectionId === sec.id);
+        if (focusItemsInSection.length) {
+            const quickNav = document.createElement('div');
+            quickNav.className = 'focus-quick-nav';
+            quickNav.innerHTML = `
+                <strong>懂才抱重點</strong>
+                ${focusGuide.items.map(item => `
+                    <button
+                        type="button"
+                        class="focus-quick-button"
+                        data-report-target="${item.sectionId}"
+                        data-metric-target="${item.metricId}"
+                    >
+                        ${(metricMeta[item.metricId]?.title || item.metricId).split(' (')[0]}
+                    </button>
+                `).join('')}
+                <button type="button" class="focus-back-button">回重點總覽</button>
+            `;
+            panel.appendChild(quickNav);
+        }
+
         container.appendChild(panel);
 
         sec.metrics.forEach(metricId => {
@@ -851,6 +917,9 @@ function renderDashboard(json) {
         container.querySelectorAll('.report-panel').forEach(panel => {
             panel.classList.toggle('active', panel.id === targetId);
         });
+        container.querySelectorAll('.focus-quick-button').forEach(button => {
+            button.classList.toggle('current', button.dataset.metricTarget === metricId);
+        });
 
         requestAnimationFrame(() => {
             document.querySelectorAll(`#${targetId} canvas`).forEach(canvas => {
@@ -875,6 +944,18 @@ function renderDashboard(json) {
     focusPanel.querySelectorAll('.focus-item').forEach(button => {
         button.addEventListener('click', () => {
             switchReport(button.dataset.reportTarget, button.dataset.metricTarget);
+        });
+    });
+
+    container.querySelectorAll('.focus-quick-button').forEach(button => {
+        button.addEventListener('click', () => {
+            switchReport(button.dataset.reportTarget, button.dataset.metricTarget);
+        });
+    });
+
+    container.querySelectorAll('.focus-back-button').forEach(button => {
+        button.addEventListener('click', () => {
+            switchReport('key-focus');
         });
     });
 }
