@@ -62,6 +62,12 @@
       margin: 0 0 56px;
     }
 
+    .statement-card.focus-entry {
+      grid-column: 1 / -1;
+      min-height: auto;
+      background: linear-gradient(135deg, #fff7ed 0%, #ffffff 70%);
+    }
+
     .statement-card {
       display: block;
       width: 100%;
@@ -167,6 +173,69 @@
       animation: panel-in 0.25s ease;
     }
 
+    .focus-intro {
+      padding: 24px;
+      margin-bottom: 20px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 16px;
+    }
+
+    .focus-type {
+      margin: 0 0 8px;
+      color: #9a3412;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .focus-intro p {
+      margin: 0;
+      color: #475569;
+    }
+
+    .focus-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .focus-item {
+      padding: 20px;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      background: #fff;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .focus-item:hover {
+      transform: translateY(-2px);
+      border-color: #fb923c;
+    }
+
+    .focus-item strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #0f172a;
+      font-size: 17px;
+    }
+
+    .focus-item span {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .focus-item small {
+      display: block;
+      margin-top: 12px;
+      color: #ea580c;
+      font-weight: 700;
+    }
+
     @keyframes panel-in {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
@@ -178,6 +247,7 @@
       padding: 32px;
       margin-bottom: 40px;
       background: #fff;
+      scroll-margin-top: 24px;
     }
 
     .metric-name { font-size: 22px; font-weight: 700; margin: 0 0 8px; color: #0f172a; }
@@ -261,6 +331,7 @@
       .statement-card p { min-height: auto; }
       .supplementary-nav { justify-content: stretch; margin-top: -36px; }
       .supplementary-button { width: 100%; }
+      .focus-list { grid-template-columns: 1fr; }
       .metric-card { padding: 22px 16px; }
       .chart-container { height: 300px; }
     }
@@ -421,14 +492,131 @@ function renderDashboard(json) {
     const container = document.getElementById('dynamic-content');
     container.innerHTML = ''; 
 
+    const getProcessedData = (id) => {
+        const raw = data[id];
+        if (!raw) return null;
+        const ttm = raw.find(i => i.date === "TTM");
+        const history = raw.filter(i => i.date !== "TTM").reverse();
+        return ttm ? [...history, ttm] : history;
+    };
+
+    const getLatestValue = (id) => {
+        const series = getProcessedData(id);
+        if (!series?.length) return null;
+        const value = Number(series[series.length - 1].value);
+        return Number.isFinite(value) ? value : null;
+    };
+
+    const getChangeRate = (id) => {
+        const series = getProcessedData(id)?.filter(item => item.date !== "TTM");
+        if (!series || series.length < 2) return null;
+        const previous = Number(series[series.length - 2].value);
+        const latest = Number(series[series.length - 1].value);
+        if (!Number.isFinite(previous) || !Number.isFinite(latest) || previous === 0) return null;
+        return ((latest - previous) / Math.abs(previous)) * 100;
+    };
+
+    const buildFocusGuide = () => {
+        const revenueGrowth = getChangeRate('revenue');
+        const netIncome = getLatestValue('net_income');
+        const netMargin = getLatestValue('net_margin');
+        const freeCashFlow = getLatestValue('free_cash_flow');
+        const currentRatio = getLatestValue('current_ratio');
+        const solvency = getLatestValue('long_term_solvency');
+        const capexRatio = Math.abs(getLatestValue('capEX_OCF') || 0);
+        const cashQuality = getLatestValue('ocf_netincome');
+        const pe = getLatestValue('pe');
+        const peg = getLatestValue('peg');
+
+        let companyType = "穩定經營型";
+        if (revenueGrowth !== null && revenueGrowth >= 15 && (netIncome === null || netIncome <= 0 || netMargin < 8)) {
+            companyType = "高成長、獲利仍在驗證型";
+        } else if (revenueGrowth !== null && revenueGrowth >= 15) {
+            companyType = "高成長型";
+        } else if (netIncome !== null && netIncome <= 0) {
+            companyType = "獲利轉機觀察型";
+        } else if (capexRatio >= 0.3) {
+            companyType = "資本投入型";
+        }
+
+        const candidates = [];
+        const addFocus = (metricId, reason, priority) => {
+            if (!getProcessedData(metricId) || candidates.some(item => item.metricId === metricId)) return;
+            const section = reportStructure.find(sec => sec.metrics.includes(metricId));
+            candidates.push({ metricId, reason, priority, sectionId: section?.id });
+        };
+
+        if (revenueGrowth !== null && revenueGrowth >= 15) {
+            addFocus('revenue', '營收成長較快，應確認成長速度能否延續。', 100);
+            addFocus('gross_profit', '高速成長是否健康，要同時觀察毛利與毛利率。', 96);
+        }
+        if (netIncome !== null && (netIncome <= 0 || (netMargin !== null && netMargin < 8))) {
+            addFocus('net_income', '獲利仍偏薄或尚未穩定，淨利與淨利率是關鍵驗證。', 94);
+        }
+        if (freeCashFlow !== null && freeCashFlow <= 0) {
+            addFocus('free_cash_flow', '自由現金流偏弱，需確認成長是否真正轉化為現金。', 98);
+        }
+        if (cashQuality !== null && (cashQuality < 0.8 || cashQuality > 2.5)) {
+            addFocus('ocf_netincome', '營運現金與淨利落差較大，應注意盈餘品質。', 92);
+        }
+        if (currentRatio !== null && currentRatio < 1.5) {
+            addFocus('current_ratio', '短期償債緩衝較有限，流動性值得持續追蹤。', 90);
+        }
+        if (solvency !== null && solvency > 3) {
+            addFocus('long_term_solvency', '債務相對營運現金流較高，需留意長期償債壓力。', 91);
+        }
+        if (capexRatio >= 0.3) {
+            addFocus('capEX_OCF', '資本支出占營運現金流較高，應觀察投入效率。', 88);
+        }
+        if (pe !== null && pe > 35) {
+            addFocus('pe', '本益比較高，市場預期是否過度樂觀值得檢視。', 87);
+        }
+        if (peg !== null && (peg > 1.5 || peg <= 0)) {
+            addFocus('peg', 'PEG 顯示估值與成長的匹配程度需要特別留意。', 89);
+        }
+
+        [
+            ['revenue', '營收趨勢是判斷公司需求與成長動能的起點。', 60],
+            ['gross_profit', '毛利與毛利率可反映產品競爭力及成本控制。', 59],
+            ['free_cash_flow', '自由現金流能驗證帳面成長是否帶來可運用現金。', 58],
+            ['roe', 'ROE 可觀察公司運用股東資金創造報酬的效率。', 50],
+            ['pe', '本益比可協助判斷目前價格反映了多少成長預期。', 49]
+        ].forEach(([metricId, reason, priority]) => addFocus(metricId, reason, priority));
+
+        return {
+            companyType,
+            items: candidates.sort((a, b) => b.priority - a.priority).slice(0, 5)
+        };
+    };
+
+    const focusGuide = buildFocusGuide();
     const statementGrid = document.createElement('div');
     statementGrid.className = 'statement-grid';
-    statementGrid.innerHTML = reportStructure
+    statementGrid.innerHTML = `
+        <button
+            type="button"
+            class="statement-card focus-entry active"
+            data-report-target="key-focus"
+            style="--statement-color: #ea580c;"
+        >
+            <span class="statement-label">DONGCAIBAO FOCUS</span>
+            <h2>懂才抱重點</h2>
+            <p>依這家公司的財務特徵，從現有指標中挑出最值得優先追蹤的項目。</p>
+            <div class="statement-metrics">
+                ${focusGuide.items.map(item => `
+                    <span class="statement-metric">
+                        ${(metricMeta[item.metricId]?.title || item.metricId).split(' (')[0]}
+                    </span>
+                `).join('')}
+            </div>
+            <span class="statement-link">目前顯示中</span>
+        </button>
+    ` + reportStructure
         .filter(sec => !sec.isSupplementary)
-        .map((sec, index) => `
+        .map(sec => `
             <button
                 type="button"
-                class="statement-card ${index === 0 ? 'active' : ''}"
+                class="statement-card"
                 data-report-target="${sec.id}"
                 style="--statement-color: ${sec.color};"
             >
@@ -442,7 +630,7 @@ function renderDashboard(json) {
                         </span>
                     `).join('')}
                 </div>
-                <span class="statement-link">${index === 0 ? '目前顯示中' : '點擊切換查看'}</span>
+                <span class="statement-link">點擊切換查看</span>
             </button>
         `).join('');
     container.appendChild(statementGrid);
@@ -461,18 +649,36 @@ function renderDashboard(json) {
     `;
     container.appendChild(supplementaryNav);
 
-    const getProcessedData = (id) => {
-        const raw = data[id];
-        if (!raw) return null;
-        const ttm = raw.find(i => i.date === "TTM");
-        const history = raw.filter(i => i.date !== "TTM").reverse();
-        return ttm ? [...history, ttm] : history;
-    };
+    const focusPanel = document.createElement('section');
+    focusPanel.className = 'report-panel active';
+    focusPanel.id = 'key-focus';
+    focusPanel.innerHTML = `
+        <h2 class="section-title">懂才抱重點</h2>
+        <div class="focus-intro">
+            <div class="focus-type">財務特徵：${focusGuide.companyType}</div>
+            <p>以下是依目前財務數據挑選的優先觀察項目。這是閱讀順序建議，不是投資評分或買賣建議。</p>
+        </div>
+        <div class="focus-list">
+            ${focusGuide.items.map(item => `
+                <button
+                    type="button"
+                    class="focus-item"
+                    data-report-target="${item.sectionId}"
+                    data-metric-target="${item.metricId}"
+                >
+                    <strong>${metricMeta[item.metricId]?.title || item.metricId}</strong>
+                    <span>${item.reason}</span>
+                    <small>查看指標圖表 →</small>
+                </button>
+            `).join('')}
+        </div>
+    `;
+    container.appendChild(focusPanel);
 
     // --- 4. 開始渲染各個區塊 ---
-    reportStructure.forEach((sec, sectionIndex) => {
+    reportStructure.forEach(sec => {
         const panel = document.createElement('section');
-        panel.className = `report-panel ${sectionIndex === 0 ? 'active' : ''}`;
+        panel.className = 'report-panel';
         panel.id = sec.id;
 
         const h2 = document.createElement('h2');
@@ -559,6 +765,7 @@ function renderDashboard(json) {
             // --- 生成卡片 HTML ---
             const card = document.createElement('div');
             card.className = 'metric-card';
+            card.id = `metric-${metricId}`;
             card.innerHTML = `
                 <div class="metric-name">${metricMeta[metricId]?.title || metricId}</div>
                 <details>
@@ -631,32 +838,43 @@ function renderDashboard(json) {
         supplementaryNav.querySelector('.supplementary-button')
     ];
 
+    const switchReport = (targetId, metricId = null) => {
+        statementGrid.querySelectorAll('.statement-card').forEach(card => {
+            const isActive = card.dataset.reportTarget === targetId;
+            card.classList.toggle('active', isActive);
+            card.querySelector('.statement-link').innerText =
+                isActive ? '目前顯示中' : '點擊切換查看';
+        });
+        supplementaryNav.querySelector('.supplementary-button')
+            .classList.toggle('active', targetId === supplementarySection.id);
+
+        container.querySelectorAll('.report-panel').forEach(panel => {
+            panel.classList.toggle('active', panel.id === targetId);
+        });
+
+        requestAnimationFrame(() => {
+            document.querySelectorAll(`#${targetId} canvas`).forEach(canvas => {
+                Chart.getChart(canvas)?.resize();
+            });
+            const scrollTarget = metricId
+                ? document.getElementById(`metric-${metricId}`)
+                : document.getElementById(targetId);
+            scrollTarget?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        });
+    };
+
     reportButtons.forEach(button => {
         button.addEventListener('click', () => {
-            const targetId = button.dataset.reportTarget;
+            switchReport(button.dataset.reportTarget);
+        });
+    });
 
-            statementGrid.querySelectorAll('.statement-card').forEach(card => {
-                const isActive = card === button;
-                card.classList.toggle('active', isActive);
-                card.querySelector('.statement-link').innerText =
-                    isActive ? '目前顯示中' : '點擊切換查看';
-            });
-            supplementaryNav.querySelector('.supplementary-button')
-                .classList.toggle('active', targetId === supplementarySection.id);
-
-            container.querySelectorAll('.report-panel').forEach(panel => {
-                panel.classList.toggle('active', panel.id === targetId);
-            });
-
-            requestAnimationFrame(() => {
-                document.querySelectorAll(`#${targetId} canvas`).forEach(canvas => {
-                    Chart.getChart(canvas)?.resize();
-                });
-                document.getElementById(targetId)?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            });
+    focusPanel.querySelectorAll('.focus-item').forEach(button => {
+        button.addEventListener('click', () => {
+            switchReport(button.dataset.reportTarget, button.dataset.metricTarget);
         });
     });
 }
