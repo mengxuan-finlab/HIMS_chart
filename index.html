@@ -64,21 +64,31 @@
 
     .statement-card {
       display: block;
+      width: 100%;
       min-height: 210px;
       padding: 24px;
       color: inherit;
+      font: inherit;
+      text-align: left;
       text-decoration: none;
       background: #fff;
       border: 1px solid var(--card-border);
       border-top: 5px solid var(--statement-color);
       border-radius: 16px;
       box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .statement-card:hover {
+    .statement-card:hover,
+    .statement-card.active {
       transform: translateY(-4px);
       box-shadow: 0 14px 30px rgba(15, 23, 42, 0.11);
+    }
+
+    .statement-card.active {
+      background: color-mix(in srgb, var(--statement-color) 6%, white);
+      border-color: var(--statement-color);
     }
 
     .statement-label {
@@ -121,6 +131,20 @@
       color: var(--statement-color);
       font-size: 13px;
       font-weight: 700;
+    }
+
+    .report-panel {
+      display: none;
+    }
+
+    .report-panel.active {
+      display: block;
+      animation: panel-in 0.25s ease;
+    }
+
+    @keyframes panel-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .metric-card {
@@ -371,8 +395,13 @@ function renderDashboard(json) {
     statementGrid.className = 'statement-grid';
     statementGrid.innerHTML = reportStructure
         .filter(sec => !sec.isSupplementary)
-        .map(sec => `
-            <a class="statement-card" href="#${sec.id}" style="--statement-color: ${sec.color};">
+        .map((sec, index) => `
+            <button
+                type="button"
+                class="statement-card ${index === 0 ? 'active' : ''}"
+                data-report-target="${sec.id}"
+                style="--statement-color: ${sec.color};"
+            >
                 <span class="statement-label">${sec.label}</span>
                 <h2>${sec.section}</h2>
                 <p>${sec.desc}</p>
@@ -383,8 +412,8 @@ function renderDashboard(json) {
                         </span>
                     `).join('')}
                 </div>
-                <span class="statement-link">查看完整分析 ↓</span>
-            </a>
+                <span class="statement-link">${index === 0 ? '目前顯示中' : '點擊切換查看'}</span>
+            </button>
         `).join('');
     container.appendChild(statementGrid);
 
@@ -397,12 +426,16 @@ function renderDashboard(json) {
     };
 
     // --- 4. 開始渲染各個區塊 ---
-    reportStructure.forEach(sec => {
+    reportStructure.filter(sec => !sec.isSupplementary).forEach((sec, sectionIndex) => {
+        const panel = document.createElement('section');
+        panel.className = `report-panel ${sectionIndex === 0 ? 'active' : ''}`;
+        panel.id = sec.id;
+
         const h2 = document.createElement('h2');
         h2.className = 'section-title';
-        h2.id = sec.id;
         h2.innerText = sec.section;
-        container.appendChild(h2);
+        panel.appendChild(h2);
+        container.appendChild(panel);
 
         sec.metrics.forEach(metricId => {
             const mData = getProcessedData(metricId);
@@ -498,7 +531,7 @@ function renderDashboard(json) {
                     </div>
                 </div>
             `;
-            container.appendChild(card);
+            panel.appendChild(card);
 
             // --- 初始化 Chart.js ---
             const ctx = document.getElementById(`chart-${metricId}`).getContext('2d');
@@ -545,6 +578,34 @@ function renderDashboard(json) {
                     options: getChartOptions(metricMeta[metricId]?.unit || "")
                 });
             }
+        });
+
+    });
+
+    statementGrid.querySelectorAll('.statement-card').forEach(button => {
+        button.addEventListener('click', () => {
+            const targetId = button.dataset.reportTarget;
+
+            statementGrid.querySelectorAll('.statement-card').forEach(card => {
+                const isActive = card === button;
+                card.classList.toggle('active', isActive);
+                card.querySelector('.statement-link').innerText =
+                    isActive ? '目前顯示中' : '點擊切換查看';
+            });
+
+            container.querySelectorAll('.report-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.id === targetId);
+            });
+
+            requestAnimationFrame(() => {
+                document.querySelectorAll(`#${targetId} canvas`).forEach(canvas => {
+                    Chart.getChart(canvas)?.resize();
+                });
+                document.getElementById(targetId)?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            });
         });
     });
 }
