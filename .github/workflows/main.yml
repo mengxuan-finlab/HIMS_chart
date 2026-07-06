@@ -32,4 +32,7 @@ jobs:
           GEMINI_API_MAIN: ${{ secrets.GEMINI_API_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-        run: python script/updated_report.py
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          python script/updated_report.py
+          python script/tw_updated_report.py
