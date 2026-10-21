@@ -25,23 +25,14 @@ def get_review_list():
         res = supabase.table("tracked_stocks").select("symbol, user_id").eq("status", "review").execute()
         stocks = res.data
         
-        # 2. 為每筆資料手動補上方案等級
-        for stock in stocks:
-            user_id = stock['user_id']
-            # 去 profiles 表查該使用者的 plan
-            user_res = supabase.table("profiles").select("plan").eq("id", user_id).single().execute()
-            print(f"DEBUG - 使用者 {user_id} 查詢結果: {user_res.data}")
-            # 存入 stock 物件中，方便後面讀取
-            stock['user_plan'] = user_res.data.get('plan', 'free') if user_res.data else 'free'
-            
         return stocks
     except Exception as e:
         print(f"❌ 抓取失敗: {e}")
         return []
 
 def get_market_news(symbol):
-    """Pro 專屬：抓取即時市場成因"""
-    print(f"🌐 Pro 功能：搜尋 {symbol} 的市場背景...")
+    """抓取財務變動的市場背景。"""
+    print(f"🌐 搜尋 {symbol} 的市場背景...")
     params = {
         "engine": "google",
         "q": f"{symbol} stock earnings reasons analysis",
@@ -129,27 +120,19 @@ def get_financial_data(symbol):
 def run_full_update(task):
     symbol = task['symbol']
     user_id = task['user_id']
-    # ✅ 只留下這一行，讀取你在 get_review_list 裡面手動塞入的欄位
-    user_plan = task.get('user_plan', 'free')
-    
-    print(f"🚀 處理中: {symbol} (等級: {user_plan})")
+    print(f"🚀 處理中: {symbol} (完整財務分析)")
     
     try:
         # 1. 抓取財務數據
         final_data_dict = get_financial_data(symbol)
         if not final_data_dict: return
         
-        # 2. 判斷是否使用 SerpApi (Pro 專屬)
-        market_context = ""
-        if user_plan == "pro":
-            market_context = get_market_news(symbol)
-            
-        # 3. 組合分級 Prompt 指令
-        reasoning_req = ""
-        if user_plan == "pro":
-            reasoning_req = f"請結合以下市場動態背景，深入分析指標變動的『商業成因』：{market_context}"
-        else:
-            reasoning_req = "請在 related_reasons 欄位固定回傳 ['升級 Pro 解鎖深度成因分析']。"
+        market_context = get_market_news(symbol)
+        reasoning_req = (
+            f"請結合以下市場動態背景，深入分析指標變動的『商業成因』：{market_context}"
+            if market_context else
+            "目前缺少市場背景，請根據財務數據分析變化，推測須明確標示為推測，不得編造新聞或確定成因。"
+        )
 
         prompt = f"""
         你是一位專業財務分析師。請分析 {symbol} 的財務數據並回傳純 JSON。
@@ -193,7 +176,7 @@ def run_full_update(task):
                 "as_of": time.strftime("%Y-%m-%d"),
                 "data": final_data_dict,
                 "ai": ai_analysis,
-                "user_plan": user_plan
+                "analysis_mode": "full"
             },
             "status": "ready",
             "report_url": f"https://hims-chart.vercel.app/?symbol={symbol.upper()}"

@@ -807,19 +807,18 @@ function renderDashboard(json) {
                    </ul>` 
                 : '';
 
-            // --- 處理 Pro 專屬成因分析 ---
+            // Older reports may contain a subscription placeholder instead of analysis.
             const reasons = aiInsight.related_reasons || [];
             const isLocked = reasons.some(r => typeof r === 'string' && r.includes("升級 Pro 解鎖深度成因分析"));
 
             const reasonsHtml = `
                 <div class="reason-section ${isLocked ? 'locked' : ''}">
                     <div class="reason-title">
-                        ${isLocked ? '🔒 深度成因分析 (Pro 專屬)' : '🎯 核心歸因分析'}
+                        核心歸因分析
                     </div>
                     ${isLocked ? 
                         `<div class="lock-text">
-                            結合 AI 即時搜尋，解析數據背後的真實商業成因。<br>
-                            <a href="#" class="upgrade-link">立即升級 Pro 查看深度洞察 →</a>
+                            這份舊報告未包含完整成因分析。新加入追蹤的股票會在分析完成後提供完整內容。
                         </div>` :
                         `<ul class="reason-list">
                             ${reasons.map(r => `<li>${r}</li>`).join('')}
