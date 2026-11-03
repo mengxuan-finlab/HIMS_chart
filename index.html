@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HIMS 財報全自動化分析儀表板</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -294,6 +295,29 @@
     }
 
     .metric-name { font-size: 22px; font-weight: 700; margin: 0 0 8px; color: #0f172a; }
+    .metric-snapshot { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0 24px; }
+    .metric-snapshot > div { min-width: 0; padding: 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f7f9fc; }
+    .metric-snapshot dt { color: #718096; font-size: 12px; margin-bottom: 10px; }
+    .metric-snapshot dd { color: #243e5b; font-size: 23px; font-weight: 600; margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+    .metric-snapshot small { display: block; margin-top: 9px; color: #8290a3; font-size: 11px; font-weight: 400; line-height: 1.6; }
+    .period-summary { margin: 0 0 32px; }
+    .period-summary-heading { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .period-summary-heading h2 { font-size: 22px; color: #243e5b; margin: 0; }
+    .period-summary-heading span { font-size: 10px; letter-spacing: 1.8px; color: #8b7da7; }
+    .period-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; }
+    .period-summary-card { min-width: 0; background: #fff; border: 1px solid #e1e6ef; border-top: 3px solid #b5a4cf; border-radius: 10px; padding: 24px; }
+    .period-summary-card:nth-child(2) { border-top-color: #c9af99; }
+    .period-summary-card:nth-child(3) { border-top-color: #9cb6c7; }
+    .period-summary-label { font-size: 11px; color: #7a8799; margin-bottom: 14px; }
+    .period-summary-card h3 { color: #304863; font-size: 17px; line-height: 1.6; margin: 0 0 12px; overflow-wrap: anywhere; }
+    .period-summary-card p { font-size: 13px; color: #708096; line-height: 1.9; margin: 0; overflow-wrap: anywhere; }
+    @media (max-width: 780px) {
+      .period-summary-grid { grid-template-columns: 1fr; gap: 12px; }
+      .period-summary-card { padding: 20px; }
+      .metric-snapshot { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+      .metric-snapshot > div { padding: 14px 16px; }
+      .metric-snapshot dd { font-size: 22px; }
+    }
     
     details { margin-bottom: 20px; }
     details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--primary); list-style: none; }
@@ -302,6 +326,7 @@
     .desc-content { background: #f1f5f9; padding: 16px; border-radius: 8px; margin-top: 10px; font-size: 15px; color: #475569; }
 
     .chart-container { height: 380px; width: 100%; margin: 24px 0; }
+    .chart-container canvas { max-width: 100%; }
 
     /* 修正後的 AI 分析顯示區 */
     .analysis-section {
@@ -506,6 +531,77 @@ async function fetchCloudReport() {
     }
 }
 
+function escapeMetricText(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
+
+function getMetricSnapshot(raw, metricId, periods = {}) {
+    const series = (Array.isArray(raw) ? raw : []).filter(item => item && Number.isFinite(item.value));
+    const ttm = series.find(item => item.date === 'TTM');
+    if (ttm) return { latest: ttm, periodLabel: '近十二個月', comparison: null };
+    const history = series.filter(item => /^\d{4}-\d{2}-\d{2}$/.test(item.date)
+        && Number.isFinite(Date.parse(item.date)) && new Date(item.date).toISOString().slice(0, 10) === item.date)
+        .slice().sort((a, b) => a.date.localeCompare(b.date));
+    const latest = history[history.length - 1];
+    if (!latest) return null;
+    const group = ['revenue', 'gross_profit', 'net_income', 'gross_margin', 'net_margin'].includes(metricId) ? 'income'
+        : metricId === 'eps_diluted' ? 'eps'
+        : ['total_equity', 'current_ratio', 'long_term_solvency'].includes(metricId) ? 'balance'
+        : ['operating_cash_flow', 'free_cash_flow', 'capEX_OCF', 'ocf_netincome'].includes(metricId) ? 'cashFlow' : 'metrics';
+    const daysBefore = item => (Date.parse(latest.date) - Date.parse(item.date)) / 86400000;
+    const last = history[history.length - 2];
+    const spacing = last ? daysBefore(last) : null;
+    const period = periods[group] || (spacing >= 60 && spacing <= 120 ? 'quarter'
+        : spacing >= 330 && spacing <= 400 ? 'annual' : null);
+    const periodLabel = period === 'quarter' ? '最新季度' : period === 'annual' ? '最新年度' : '最新數值';
+    // Match a prior-year period before falling back to the immediately preceding quarter.
+    let previous = history.slice(0, -1).reverse().find(item => daysBefore(item) >= 330 && daysBefore(item) <= 400);
+    let label = period === 'annual' ? '較上年度' : '較去年同期';
+    if (!previous && period === 'quarter' && spacing >= 60 && spacing <= 120) {
+        previous = last;
+        label = '較上一季';
+    }
+    if (!previous || !period) return { latest, periodLabel, comparison: null };
+    const delta = latest.value - previous.value;
+    const percentageMetric = metricMeta[metricId]?.unit === '%';
+    const monetaryMetric = metricMeta[metricId]?.unit.startsWith('M USD')
+        || ['operating_cash_flow', 'free_cash_flow', 'eps_diluted'].includes(metricId);
+    const growth = monetaryMetric && previous.value > 0 && latest.value >= 0
+        ? delta / previous.value * 100 : null;
+    return { latest, periodLabel, comparison: { previous, label, delta, growth,
+        kind: percentageMetric ? 'points' : monetaryMetric ? 'amount' : 'ratio' } };
+}
+
+function formatMetricValue(metricId, value) {
+    const unit = metricMeta[metricId]?.unit;
+    const number = n => new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(n);
+    if (unit?.startsWith('M USD') || ['operating_cash_flow', 'free_cash_flow'].includes(metricId)) {
+        const dollars = value * (unit.startsWith('M USD') ? 1e6 : 1);
+        return Math.abs(dollars) >= 1e8 ? `${number(dollars / 1e8)} 億美元`
+            : Math.abs(dollars) >= 1e6 ? `${number(dollars / 1e6)} 百萬美元` : `${number(dollars)} 美元`;
+    }
+    return `${number(value)}${unit === '%' ? '%' : metricId === 'eps_diluted' ? ' 美元' : ' 倍'}`;
+}
+
+function renderMetricSnapshot(metricId, snapshot) {
+    if (!snapshot) return '';
+    const { latest, periodLabel, comparison } = snapshot;
+    const cell = (label, value, detail) => `<div><dt>${escapeMetricText(label)}</dt><dd>${escapeMetricText(value)}<small>${escapeMetricText(detail)}</small></dd></div>`;
+    let cells = cell(periodLabel, formatMetricValue(metricId, latest.value), latest.date);
+    if (comparison) {
+        const { label, previous, delta, growth, kind } = comparison;
+        const signed = value => `${value > 0 ? '+' : ''}${new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(value)}`;
+        const change = growth !== null ? `${signed(growth)}%`
+            : kind === 'points' ? `${signed(delta)} 個百分點`
+            : `${delta > 0 ? '+' : ''}${formatMetricValue(metricId, delta)}`;
+        cells += cell(label + (growth === null && kind === 'amount' ? '差額' : ''), change,
+            growth === null && kind === 'amount' ? '零／負值基期或轉虧，不計成長率' : `${previous.date} → ${latest.date}`);
+        cells += cell('比較基期', formatMetricValue(metricId, previous.value), previous.date);
+    }
+    return `<dl class="metric-snapshot" aria-label="${escapeMetricText(metricMeta[metricId]?.title || metricId)}數字快照">${cells}</dl>`;
+}
+
 function renderDashboard(json) {
     // --- 1. 資料安全性防護 ---
     if (!json || !json.data || !json.ai) {
@@ -538,11 +634,17 @@ function renderDashboard(json) {
 
     const getProcessedData = (id) => {
         const raw = data[id];
-        if (!raw) return null;
-        const ttm = raw.find(i => i.date === "TTM");
-        const history = raw.filter(i => i.date !== "TTM").reverse();
+        if (!Array.isArray(raw)) return null;
+        const valid = raw.filter(item => item && Number.isFinite(item.value));
+        const ttm = valid.find(i => i.date === "TTM");
+        const history = valid.filter(i => /^\d{4}-\d{2}-\d{2}$/.test(i.date))
+            .slice().sort((a, b) => a.date.localeCompare(b.date));
+        if (!history.length && !ttm) return null;
         return ttm ? [...history, ttm] : history;
     };
+
+    const snapshots = Object.fromEntries(Object.keys(metricMeta).map(id =>
+        [id, getMetricSnapshot(data[id], id, json.periods)]));
 
     const getLatestValue = (id) => {
         const series = getProcessedData(id);
@@ -552,12 +654,7 @@ function renderDashboard(json) {
     };
 
     const getChangeRate = (id) => {
-        const series = getProcessedData(id)?.filter(item => item.date !== "TTM");
-        if (!series || series.length < 2) return null;
-        const previous = Number(series[series.length - 2].value);
-        const latest = Number(series[series.length - 1].value);
-        if (!Number.isFinite(previous) || !Number.isFinite(latest) || previous === 0) return null;
-        return ((latest - previous) / Math.abs(previous)) * 100;
+        return snapshots[id]?.comparison?.growth ?? null;
     };
 
     const buildFocusGuide = () => {
@@ -634,6 +731,37 @@ function renderDashboard(json) {
     };
 
     const focusGuide = buildFocusGuide();
+    const summaryCards = [];
+    const improvement = ['revenue', 'net_income', 'eps_diluted', 'operating_cash_flow', 'free_cash_flow']
+        .map(id => ({ id, snapshot: snapshots[id] }))
+        .filter(item => item.snapshot?.comparison?.growth > 0 && item.snapshot.comparison.label !== '較上一季')
+        .sort((a, b) => b.snapshot.comparison.growth - a.snapshot.comparison.growth)[0];
+    if (improvement) {
+        const { id, snapshot } = improvement;
+        const name = metricMeta[id].title.split(' (')[0];
+        summaryCards.push(['成長亮點', `${name} ${snapshot.comparison.label}成長 ${snapshot.comparison.growth.toLocaleString('zh-TW', { maximumFractionDigits: 1 })}%`,
+            `${snapshot.latest.date} 為 ${formatMetricValue(id, snapshot.latest.value)}，比較基期為 ${snapshot.comparison.previous.date}。`]);
+    }
+    const warning = ['net_income', 'free_cash_flow'].find(id => snapshots[id]?.latest.value < 0);
+    if (warning) {
+        summaryCards.push(['主要隱憂', `${metricMeta[warning].title.split(' (')[0]}仍為負值`,
+            `${snapshots[warning].latest.date} 為 ${formatMetricValue(warning, snapshots[warning].latest.value)}，後續需確認能否改善，不能只看營收擴張。`]);
+    } else if (snapshots.current_ratio?.latest.value < 1) {
+        summaryCards.push(['主要隱憂', '短期流動性值得留意', `流動比率為 ${formatMetricValue('current_ratio', snapshots.current_ratio.latest.value)}（${snapshots.current_ratio.latest.date}），需進一步查看負債到期與資金安排。`]);
+    } else if (Array.isArray(ai.risks) && ai.risks.some(risk => typeof risk === 'string' && risk.trim())) {
+        summaryCards.push(['風險觀察', '研究報告中的風險重點', ai.risks.find(risk => typeof risk === 'string' && risk.trim())]);
+    }
+    const watch = focusGuide.items[0];
+    if (watch) summaryCards.push(['下期觀察', metricMeta[watch.metricId].title.split(' (')[0], watch.reason]);
+    if (summaryCards.length) {
+        const summary = document.createElement('section');
+        summary.className = 'period-summary';
+        summary.setAttribute('aria-label', '本期財報重點');
+        summary.innerHTML = `<div class="period-summary-heading"><h2>本期財報重點</h2><span>FINANCIAL BRIEF</span></div>
+            <div class="period-summary-grid">${summaryCards.map(([label, title, detail]) =>
+                `<article class="period-summary-card"><div class="period-summary-label">${escapeMetricText(label)}</div><h3>${escapeMetricText(title)}</h3><p>${escapeMetricText(detail)}</p></article>`).join('')}</div>`;
+        container.appendChild(summary);
+    }
     const statementGrid = document.createElement('div');
     statementGrid.className = 'statement-grid';
     statementGrid.innerHTML = `
@@ -837,6 +965,7 @@ function renderDashboard(json) {
                     <summary>指標定義與說明</summary>
                     <div class="desc-content">${metricMeta[metricId]?.desc || ""}</div>
                 </details>
+                ${renderMetricSnapshot(metricId, snapshots[metricId])}
                 <div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>
                 <div class="analysis-section">
                     <div class="analysis-summary">
