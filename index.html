@@ -325,8 +325,23 @@
     details[open] summary::before { content: "▼ "; }
     .desc-content { background: #f1f5f9; padding: 16px; border-radius: 8px; margin-top: 10px; font-size: 15px; color: #475569; }
 
-    .chart-container { height: 380px; width: 100%; margin: 24px 0; }
+    .chart-container { height: 310px; width: 100%; margin: 24px 0; }
     .chart-container canvas { max-width: 100%; }
+    .metric-card { border-top: 3px solid var(--metric-accent, #5965bc); }
+    .metric-card details summary { color: var(--metric-accent, #5965bc); }
+    .metric-snapshot > .snapshot-current { background: var(--metric-soft, #f0f1fa); border-color: transparent; }
+    .metric-snapshot .snapshot-change[data-direction="increase"] { background: #edf3fb; border-color: #dce7f5; }
+    .metric-snapshot .snapshot-change[data-direction="decrease"] { background: #fbf4ec; border-color: #eee0cd; }
+    .snapshot-direction { display: inline-block; font-size: 10px; margin-left: 6px; padding: 3px 6px; border-radius: 4px; background: #fff; color: #6b7c91; font-weight: 400; vertical-align: middle; }
+    .metric-reading { border-top: 1px solid #e5eaf1; padding-top: 24px; display: grid; gap: 20px; }
+    .metric-reading-block { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; }
+    .metric-reading-number { display: grid; place-items: center; align-self: start; height: 26px; border-radius: 7px; font-size: 10px; color: var(--metric-accent, #5965bc); background: var(--metric-soft, #f0f1fa); }
+    .metric-reading h4 { color: #344b66; font-size: 13px; margin: 3px 0 8px; font-weight: 600; }
+    .metric-reading p, .metric-reading li { color: #697b90; font-size: 14px; line-height: 1.9; margin: 0; overflow-wrap: anywhere; }
+    .metric-reading ul { padding-left: 18px; margin: 0; }
+    .metric-reading li + li { margin-top: 7px; }
+    .metric-reading .reading-watch { padding: 18px; border-radius: 9px; background: var(--metric-soft, #f0f1fa); }
+    .reading-watch .metric-reading-number { background: #ffffffb3; }
 
     /* 修正後的 AI 分析顯示區 */
     .analysis-section {
@@ -402,7 +417,7 @@
       .focus-list { grid-template-columns: 1fr; }
       .focus-back-button { width: 100%; margin-left: 0; }
       .metric-card { padding: 22px 16px; }
-      .chart-container { height: 300px; }
+      .chart-container { height: 260px; }
     }
   </style>
 </head>
@@ -457,7 +472,7 @@ const reportStructure = [
         section: "損益表",
         label: "INCOME STATEMENT",
         desc: "了解公司賺多少、成本多少，以及最後留下多少利潤。",
-        color: "#2563eb",
+        color: "#5965bc",
         metrics: ["revenue", "gross_profit", "net_income", "eps_diluted"]
     },
     {
@@ -465,7 +480,7 @@ const reportStructure = [
         section: "資產負債表",
         label: "BALANCE SHEET",
         desc: "檢視公司的資產底子、股東權益與短長期償債能力。",
-        color: "#7c3aed",
+        color: "#9278af",
         metrics: ["total_equity", "current_ratio", "long_term_solvency"]
     },
     {
@@ -473,7 +488,7 @@ const reportStructure = [
         section: "現金流量表",
         label: "CASH FLOW STATEMENT",
         desc: "判斷公司實際產生現金的能力，以及資本支出的負擔。",
-        color: "#059669",
+        color: "#258f84",
         metrics: ["operating_cash_flow", "free_cash_flow", "capEX_OCF", "ocf_netincome"]
     },
     {
@@ -481,7 +496,7 @@ const reportStructure = [
         section: "估值與回報",
         label: "VALUATION & RETURNS",
         desc: "補充檢視獲利效率與市場估值，包含 ROE、ROA、P/E 與 PEG。",
-        color: "#ea580c",
+        color: "#64819e",
         metrics: ["roe", "roa", "pe", "peg"],
         isSupplementary: true
     }
@@ -587,8 +602,8 @@ function formatMetricValue(metricId, value) {
 function renderMetricSnapshot(metricId, snapshot) {
     if (!snapshot) return '';
     const { latest, periodLabel, comparison } = snapshot;
-    const cell = (label, value, detail) => `<div><dt>${escapeMetricText(label)}</dt><dd>${escapeMetricText(value)}<small>${escapeMetricText(detail)}</small></dd></div>`;
-    let cells = cell(periodLabel, formatMetricValue(metricId, latest.value), latest.date);
+    const cell = (label, value, detail, className = '', direction = '') => `<div class="${className}"${direction ? ` data-direction="${direction}"` : ''}><dt>${escapeMetricText(label)}</dt><dd>${escapeMetricText(value)}${direction ? `<span class="snapshot-direction">${direction === 'increase' ? '↑ 增加' : direction === 'decrease' ? '↓ 減少' : '持平'}</span>` : ''}<small>${escapeMetricText(detail)}</small></dd></div>`;
+    let cells = cell(periodLabel, formatMetricValue(metricId, latest.value), latest.date, 'snapshot-current');
     if (comparison) {
         const { label, previous, delta, growth, kind } = comparison;
         const signed = value => `${value > 0 ? '+' : ''}${new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(value)}`;
@@ -596,10 +611,74 @@ function renderMetricSnapshot(metricId, snapshot) {
             : kind === 'points' ? `${signed(delta)} 個百分點`
             : `${delta > 0 ? '+' : ''}${formatMetricValue(metricId, delta)}`;
         cells += cell(label + (growth === null && kind === 'amount' ? '差額' : ''), change,
-            growth === null && kind === 'amount' ? '零／負值基期或轉虧，不計成長率' : `${previous.date} → ${latest.date}`);
+            growth === null && kind === 'amount' ? '零／負值基期或轉虧，不計成長率' : `${previous.date} → ${latest.date}`,
+            'snapshot-change', delta > 0 ? 'increase' : delta < 0 ? 'decrease' : 'flat');
         cells += cell('比較基期', formatMetricValue(metricId, previous.value), previous.date);
     }
     return `<dl class="metric-snapshot" aria-label="${escapeMetricText(metricMeta[metricId]?.title || metricId)}數字快照">${cells}</dl>`;
+}
+
+function buildMetricReading(metricId, snapshots, data, periods, insight) {
+    const meanings = {
+        revenue: '營收反映需求規模，但成長能否轉成股東收益，還要一起看毛利率與費用負擔。',
+        gross_profit: '毛利金額反映營收規模與毛利率的共同結果；單看金額成長，無法判斷產品組合或成本效率是否改善。',
+        net_income: '淨利是成本、費用及業外項目共同作用的結果。獲利擴張是否穩健，仍需搭配淨利率與現金回收檢視。',
+        eps_diluted: '稀釋 EPS 同時受淨利與稀釋股數影響；僅看每股盈餘變化，無法確認是營運改善、股數改變或兩者共同帶動。',
+        total_equity: '股東權益是帳面資本，不等同市值。權益增加仍需搭配報酬率及股數變化，才能評估每股價值的累積。',
+        current_ratio: '流動資產是否足以應對短期負債，還取決於應收帳款與存貨能否及時變現，不能只看比率高低。',
+        long_term_solvency: '債務相對營運現金流的比值，可作為償債負擔的觀察起點，但不是實際還款年限；負值現金流時尤其不宜直接解讀高低。',
+        operating_cash_flow: '營運現金流可檢視獲利是否轉成現金，但也受預收款、應收帳款與存貨變動影響，單期增加未必能持續。',
+        free_cash_flow: '自由現金流反映資本支出後可運用的現金；正值不等於一定用來回購，負值也可能與擴張投資有關。',
+        capEX_OCF: '這項比率觀察營運現金投入資本支出的程度；投入提高需搭配未來產出檢視，不能直接視為獲利惡化。',
+        ocf_netincome: '營運現金與淨利的落差可能來自營運資金或非現金項目；淨利為零或負值時，不適合用一般門檻判斷盈餘品質。',
+        roe: 'ROE 同時受獲利與股東權益規模影響；高 ROE 可能涉及回購、槓桿或較小的權益基數，不一定全來自營運優勢。',
+        roa: 'ROA 反映資產產生獲利的效率；擴廠、收購及資產減損都可能影響分母，需在相近商業模式下比較。',
+        pe: '本益比描述價格相對已實現盈餘的倍數，並不是合理價的判定。估值能否維持，取決於後續獲利是否支撐市場預期。',
+        peg: 'PEG 對成長率的定義與基期很敏感，不能單憑低於一倍就判定便宜；需先確認成長假設可否持續。'
+    };
+    const watches = {
+        revenue: '下期同時追蹤同口徑的營收成長與毛利率：需求擴張是否延續，以及增加的收入能否留下利潤。',
+        gross_profit: '對照下一期毛利率、產品組合與管理層成本說明，區分規模擴張與單位獲利改善。',
+        net_income: '追蹤營收與淨利率是否同向改善，並查看稅率、業外收益或一次性項目是否影響獲利。',
+        eps_diluted: '核對同期間淨利與加權平均稀釋股數，判斷 EPS 變化的來源；不要僅憑回購消息推定股數下降。',
+        total_equity: '查看保留盈餘、回購與股利如何共同改變權益，並對照 ROE 是否只是分母縮小。',
+        current_ratio: '觀察現金、應收帳款及存貨的組成，以及一年內到期負債，確認流動性緩衝的品質。',
+        long_term_solvency: '追蹤債務到期安排、利息負擔與年度營運現金流，確認是否需要再融資。',
+        operating_cash_flow: '查看現金流量表中的應收帳款、存貨與預收款變化，確認現金增加是否可持續。',
+        free_cash_flow: '一起追蹤營運現金流與資本支出，確認現金改善源自本業回收，還是暫時減少投資。',
+        capEX_OCF: '觀察資本支出計畫、產能利用率與營收貢獻，確認投資支出是否逐步產生回報。',
+        ocf_netincome: '核對同期間非現金費用與營運資金變化，避免把單次收款或低淨利基期視為長期改善。',
+        roe: '同時觀察淨利、股東權益及槓桿變化，確認報酬率提高的原因是否可持續。',
+        roa: '追蹤新增資產帶來的收入、獲利與資產減損，確認資產投入能否產生相應回報。',
+        pe: '下一期確認獲利成長與指引是否延續；盈餘下修時，即使股價不變，本益比也可能上升。',
+        peg: '確認成長率計算期間與最新獲利展望，觀察成長放緩是否削弱目前估值的支撐。'
+    };
+    let meaning = meanings[metricId] || '';
+    if (['revenue', 'gross_profit', 'net_income'].includes(metricId)) {
+        const marginId = metricId === 'net_income' ? 'net_margin' : 'gross_margin';
+        const margin = getMetricSnapshot(data[marginId], marginId, periods);
+        const amount = snapshots[metricId];
+        if (amount?.comparison && margin?.comparison && amount.latest.date === margin.latest.date
+            && amount.comparison.previous.date === margin.comparison.previous.date) {
+            const name = marginId === 'net_margin' ? '淨利率' : '毛利率';
+            const delta = margin.comparison.delta;
+            meaning = delta > 0 ? `${name}提高，表示每單位營收留下的利潤增加。仍需核對產品組合、費用或一次性項目，確認改善能否持續。`
+                : delta < 0 ? `${name}下降，表示每單位營收留下的利潤減少；即使金額成長，也不能直接視為獲利效率改善。`
+                : `${name}大致持平，金額變化較需從營收規模解讀；下一步應確認成長是否需要更多費用或資本投入。`;
+        }
+    }
+    if (['operating_cash_flow', 'free_cash_flow'].includes(metricId)) {
+        const ocf = snapshots.operating_cash_flow?.latest;
+        const fcf = snapshots.free_cash_flow?.latest;
+        if (ocf && fcf && ocf.date === fcf.date && ocf.value > 0 && fcf.value >= 0 && fcf.value <= ocf.value) {
+            const share = (fcf.value / ocf.value * 100).toLocaleString('zh-TW', { maximumFractionDigits: 1 });
+            meaning = `同期間約 ${share}% 的營運現金流保留為自由現金流，提供資本支出後的資金彈性；實際用途仍需對照投資、償債與股東回報安排。`;
+        }
+    }
+    const reasons = Array.isArray(insight?.related_reasons) ? [...new Set(insight.related_reasons
+        .filter(value => typeof value === 'string' && value.trim()
+            && !/^(未披露|未提供|資料不足|無資料|暫無)|升級 Pro 解鎖/.test(value.trim())).map(value => value.trim()))].slice(0, 2) : [];
+    return { meaning, reasons, watch: watches[metricId] || '' };
 }
 
 function renderDashboard(json) {
@@ -928,37 +1007,21 @@ function renderDashboard(json) {
 
             // 移除原本那行：if (!mData || !aiInsight) return;
 
-            const summaryText = aiInsight.summary || (typeof aiInsight === 'string' ? aiInsight : "");
-            const bulletsHtml = aiInsight.bullets 
-                ? `<ul style="margin: 12px 0 0; padding-left: 20px; font-size: 14px; color: #475569;">
-                    ${aiInsight.bullets.map(b => `<li style="margin-bottom: 4px;">${b}</li>`).join('')}
-                   </ul>` 
-                : '';
-
-            // Older reports may contain a subscription placeholder instead of analysis.
-            const reasons = aiInsight.related_reasons || [];
-            const isLocked = reasons.some(r => typeof r === 'string' && r.includes("升級 Pro 解鎖深度成因分析"));
-
-            const reasonsHtml = `
-                <div class="reason-section ${isLocked ? 'locked' : ''}">
-                    <div class="reason-title">
-                        核心歸因分析
-                    </div>
-                    ${isLocked ? 
-                        `<div class="lock-text">
-                            這份舊報告未包含完整成因分析。新加入追蹤的股票會在分析完成後提供完整內容。
-                        </div>` :
-                        `<ul class="reason-list">
-                            ${reasons.map(r => `<li>${r}</li>`).join('')}
-                        </ul>`
-                    }
-                </div>
-            `;
+            const reading = buildMetricReading(metricId, snapshots, data, json.periods, aiInsight);
+            const theme = {
+                'income-statement': { color: '#5965bc', soft: '#f0f1fa', fill: 'rgba(89,101,188,.08)' },
+                'balance-sheet': { color: '#9278af', soft: '#f4f0f8', fill: 'rgba(146,120,175,.08)' },
+                'cash-flow-statement': { color: '#258f84', soft: '#edf7f4', fill: 'rgba(37,143,132,.08)' },
+                valuation: { color: '#64819e', soft: '#eef3f8', fill: 'rgba(100,129,158,.08)' }
+            }[sec.id];
+            const readingBlock = (number, title, content, className = '') => `<div class="metric-reading-block ${className}"><span class="metric-reading-number" aria-hidden="true">${number}</span><div><h4>${title}</h4>${content}</div></div>`;
 
             // --- 生成卡片 HTML ---
             const card = document.createElement('div');
             card.className = 'metric-card';
             card.id = `metric-${metricId}`;
+            card.style.setProperty('--metric-accent', theme.color);
+            card.style.setProperty('--metric-soft', theme.soft);
             card.innerHTML = `
                 <div class="metric-name">${metricMeta[metricId]?.title || metricId}</div>
                 <details>
@@ -967,13 +1030,10 @@ function renderDashboard(json) {
                 </details>
                 ${renderMetricSnapshot(metricId, snapshots[metricId])}
                 <div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>
-                <div class="analysis-section">
-                    <div class="analysis-summary">
-                        <h4>💡 AI 趨勢解讀</h4>
-                        <div class="summary-text" style="font-weight: 500;">${summaryText}</div>
-                        ${bulletsHtml} 
-                        ${reasonsHtml} 
-                    </div>
+                <div class="metric-reading">
+                    ${reading.meaning ? readingBlock('01', '這代表什麼', `<p>${escapeMetricText(reading.meaning)}</p>`) : ''}
+                    ${reading.reasons.length ? readingBlock('02', '變動原因', `<ul>${reading.reasons.map(reason => `<li>${escapeMetricText(reason)}</li>`).join('')}</ul>`) : ''}
+                    ${reading.watch ? readingBlock('03', '接下來看什麼', `<p>${escapeMetricText(reading.watch)}</p>`, 'reading-watch') : ''}
                 </div>
             `;
             panel.appendChild(card);
@@ -992,12 +1052,12 @@ function renderDashboard(json) {
                     data: {
                         labels: labels,
                         datasets: [
-                            { label: metricId === 'gross_profit' ? '毛利金額' : '淨利金額', data: values, backgroundColor: 'rgba(37, 99, 235, 0.6)', yAxisID: 'y', order: 2 },
+                            { label: metricId === 'gross_profit' ? '毛利金額' : '淨利金額', data: values, backgroundColor: 'rgba(89,101,188,.55)', yAxisID: 'y', order: 2 },
                             { 
                                 label: metricId === 'gross_profit' ? '毛利率 (%)' : '淨利率 (%)',
-                                data: marginData ? marginData.map(i => i.value) : [], 
-                                type: 'line', borderColor: '#10b981', 
-                                borderWidth: 3, pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#10b981",
+                                data: labels.map(date => marginData?.find(point => point.date === date)?.value ?? null),
+                                type: 'line', borderColor: '#258f84',
+                                borderWidth: 2.5, pointBackgroundColor: '#258f84',
                                 pointRadius: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? 8 : 4, tension: 0.4, yAxisID: 'y1', order: 1 
                             }
                         ]
@@ -1013,16 +1073,20 @@ function renderDashboard(json) {
                         datasets: [{
                             label: metricMeta[metricId]?.title || metricId,
                             data: values,
-                            borderColor: '#2563eb',
-                            backgroundColor: isBar ? 'rgba(37, 99, 235, 0.6)' : 'rgba(37, 99, 235, 0.1)',
-                            fill: !isBar, tension: 0.4,
-                            pointRadius: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? 8 : 4,
-                            pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#2563eb",
+                            borderColor: theme.color,
+                            backgroundColor: isBar ? theme.color : theme.fill,
+                            borderWidth: 2.5,
+                            fill: !isBar, tension: 0.2,
+                            pointRadius: c => c.dataIndex === values.length - 1 ? 5 : 3,
+                            pointBackgroundColor: theme.color,
+                            pointBorderColor: '#fff', pointBorderWidth: 2,
                         }]
                     },
                     options: getChartOptions(metricMeta[metricId]?.unit || "", '', false,
                         metricMeta[metricId]?.unit === 'M USD' || ['operating_cash_flow', 'free_cash_flow'].includes(metricId) ? values : null,
-                        metricMeta[metricId]?.unit === 'M USD' ? 1e6 : 1)
+                        metricMeta[metricId]?.unit === 'M USD' ? 1e6 : 1,
+                        { color: theme.color, text: formatMetricValue(metricId, values[values.length - 1]) }),
+                    plugins: [latestMetricLabel]
                 });
             }
         });
@@ -1090,9 +1154,33 @@ function renderDashboard(json) {
     });
 }
 
-function getChartOptions(y1Label, y2Label = '', dual = false, monetaryValues = null, valueMultiplier = 1) {
+const latestMetricLabel = {
+    id: 'latestMetricLabel',
+    afterDatasetsDraw(chart, args, options) {
+        if (!options.text || chart.data.datasets.length !== 1) return;
+        const points = chart.getDatasetMeta(0).data;
+        const point = points[points.length - 1];
+        if (!point || point.skip || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+        const { ctx, chartArea } = chart;
+        ctx.save();
+        ctx.font = '600 11px sans-serif';
+        const width = Math.min(ctx.measureText(options.text).width + 16, chartArea.right - chartArea.left);
+        const x = Math.max(chartArea.left, Math.min(point.x - width / 2, chartArea.right - width));
+        const y = Math.max(chartArea.top + 2, point.y - 32);
+        ctx.fillStyle = 'rgba(255,255,255,.95)';
+        ctx.fillRect(x, y, width, 24);
+        ctx.fillStyle = options.color;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(options.text, x + 8, y + 12, Math.max(1, width - 16));
+        ctx.restore();
+    }
+};
+
+function getChartOptions(y1Label, y2Label = '', dual = false, monetaryValues = null, valueMultiplier = 1, latestLabel = null) {
     const yAxis = { beginAtZero: false, title: { display: true, text: y1Label } };
-    const plugins = { legend: { position: 'top' } };
+    const plugins = { legend: { display: dual, position: 'top', labels: { usePointStyle: true, boxWidth: 10, padding: 18 } },
+        latestMetricLabel: latestLabel || false };
     if (monetaryValues) {
         // Revenue/profit/equity arrive in millions; cash flows arrive in dollars.
         const magnitude = monetaryValues.reduce((max, value) =>
@@ -1107,13 +1195,19 @@ function getChartOptions(y1Label, y2Label = '', dual = false, monetaryValues = n
                 : `${context.dataset.label}：${formatter.format(context.parsed.y * valueMultiplier)} 美元`
         } };
     }
+    yAxis.grid = { color: '#edf0f6' };
+    if (latestLabel) yAxis.grace = '10%';
+    yAxis.border = { display: false };
+    yAxis.ticks = { color: '#8190a3', font: { size: 11 }, maxTicksLimit: 6, ...yAxis.ticks };
     return {
         responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: latestLabel ? 20 : 0, right: 8 } },
         plugins,
         scales: {
             y: yAxis,
-            y1: dual ? { position: 'right', title: { display: true, text: y2Label }, min: 0 } : { display: false },
-            x: { grid: { display: false } }
+            y1: dual ? { position: 'right', title: { display: true, text: y2Label }, beginAtZero: true,
+                grid: { drawOnChartArea: false }, border: { display: false } } : { display: false },
+            x: { grid: { display: false }, border: { display: false }, ticks: { color: '#8190a3', font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 4 } }
         }
     };
 }
