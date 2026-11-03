@@ -863,9 +863,9 @@ function renderDashboard(json) {
                     data: {
                         labels: labels,
                         datasets: [
-                            { label: '金額 (M USD)', data: values, backgroundColor: 'rgba(37, 99, 235, 0.6)', yAxisID: 'y', order: 2 },
+                            { label: metricId === 'gross_profit' ? '毛利金額' : '淨利金額', data: values, backgroundColor: 'rgba(37, 99, 235, 0.6)', yAxisID: 'y', order: 2 },
                             { 
-                                label: '百分比 (%)', 
+                                label: metricId === 'gross_profit' ? '毛利率 (%)' : '淨利率 (%)',
                                 data: marginData ? marginData.map(i => i.value) : [], 
                                 type: 'line', borderColor: '#10b981', 
                                 borderWidth: 3, pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#10b981",
@@ -873,7 +873,7 @@ function renderDashboard(json) {
                             }
                         ]
                     },
-                    options: getChartOptions('M USD', '%', true)
+                    options: getChartOptions('M USD', '%', true, values, 1e6)
                 });
             } else {
                 const isBar = ['eps_diluted'].includes(metricId);
@@ -891,7 +891,9 @@ function renderDashboard(json) {
                             pointBackgroundColor: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? "#dc2626" : "#2563eb",
                         }]
                     },
-                    options: getChartOptions(metricMeta[metricId]?.unit || "")
+                    options: getChartOptions(metricMeta[metricId]?.unit || "", '', false,
+                        metricMeta[metricId]?.unit === 'M USD' || ['operating_cash_flow', 'free_cash_flow'].includes(metricId) ? values : null,
+                        metricMeta[metricId]?.unit === 'M USD' ? 1e6 : 1)
                 });
             }
         });
@@ -959,12 +961,28 @@ function renderDashboard(json) {
     });
 }
 
-function getChartOptions(y1Label, y2Label = '', dual = false) {
+function getChartOptions(y1Label, y2Label = '', dual = false, monetaryValues = null, valueMultiplier = 1) {
+    const yAxis = { beginAtZero: false, title: { display: true, text: y1Label } };
+    const plugins = { legend: { position: 'top' } };
+    if (monetaryValues) {
+        // Revenue/profit/equity arrive in millions; cash flows arrive in dollars.
+        const magnitude = monetaryValues.reduce((max, value) =>
+            Number.isFinite(value) ? Math.max(max, Math.abs(value * valueMultiplier)) : max, 0);
+        const divisor = magnitude >= 1e8 ? 1e8 : magnitude >= 1e6 ? 1e6 : 1;
+        yAxis.title.text = divisor === 1e8 ? '億美元' : divisor === 1e6 ? '百萬美元' : '美元';
+        const formatter = new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 });
+        yAxis.ticks = { maxTicksLimit: 6, callback: value => formatter.format(value * valueMultiplier / divisor) };
+        plugins.tooltip = { callbacks: {
+            label: context => context.dataset.yAxisID === 'y1'
+                ? `${context.dataset.label}：${formatter.format(context.parsed.y)}%`
+                : `${context.dataset.label}：${formatter.format(context.parsed.y * valueMultiplier)} 美元`
+        } };
+    }
     return {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'top' } },
+        plugins,
         scales: {
-            y: { beginAtZero: false, title: { display: true, text: y1Label } },
+            y: yAxis,
             y1: dual ? { position: 'right', title: { display: true, text: y2Label }, min: 0 } : { display: false },
             x: { grid: { display: false } }
         }
