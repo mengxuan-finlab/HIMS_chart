@@ -37,15 +37,21 @@
     .meta-info { font-size: 14px; color: var(--text-muted); margin-top: 8px; }
 
     .ai-insight-card {
-      background: var(--gray-bg);
-      border-left: 4px solid var(--primary);
-      padding: 24px;
-      border-radius: 8px;
+      background: linear-gradient(180deg, #f8f7fc, #ffffff 120px);
+      border: 1px solid #e1e6ef;
+      padding: clamp(20px, 3vw, 32px);
+      border-radius: 12px;
       margin: 32px 0 48px;
     }
-    .ai-insight-card h3 { margin: 0 0 12px; font-size: 18px; color: var(--primary); display: flex; align-items: center; }
-    .one-liner { font-size: 19px; font-weight: 600; margin-bottom: 16px; }
-    .risk-tag { background: #fee2e2; color: var(--danger); padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; margin-right: 8px; display: inline-block; vertical-align: middle; }
+    .ai-insight-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .ai-insight-heading h3 { margin: 0; font-size: 17px; font-weight: 700; color: #29435e; }
+    .ai-insight-heading span { font-size: 10px; letter-spacing: .12em; color: #8b7da7; }
+    .one-liner { font-size: 17px; font-weight: 500; color: #344b65; line-height: 1.9; overflow-wrap: anywhere; }
+    .insight-risks { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e6e9f1; }
+    .insight-risks h4 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: #7b6a92; }
+    .insight-risk { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+    .insight-risk-number { padding-top: 3px; font-size: 11px; color: #9b8bb1; font-variant-numeric: tabular-nums; }
+    .insight-risk p { margin: 0; font-size: 14px; color: #64748b; line-height: 1.85; overflow-wrap: anywhere; }
 
     .section-title {
       font-size: 24px;
@@ -315,11 +321,14 @@
     <div class="meta-info" id="update-info">載入中...</div>
   </div>
 
-  <div class="ai-insight-card">
-    <h3>🤖 AI 智能診斷</h3>
+  <section class="ai-insight-card" aria-labelledby="ai-insight-title">
+    <div class="ai-insight-heading"><h3 id="ai-insight-title">AI 財務摘要</h3><span>RESEARCH SNAPSHOT</span></div>
     <div class="one-liner" id="one-liner"></div>
-    <div id="risk-container" style="line-height: 2;"></div>
-  </div>
+    <div class="insight-risks" id="insight-risks" hidden>
+      <h4>風險與觀察</h4>
+      <div id="risk-container"></div>
+    </div>
+  </section>
 
   <div id="dynamic-content"></div>
 </main>
@@ -590,13 +599,27 @@ function renderDashboard(json) {
     const genDate = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
     document.getElementById('update-info').innerText = `數據截止: ${json.as_of} | AI 生成於: ${genDate}`;
     
-    document.getElementById('one-liner').innerText = ai.one_liner || "";
-    
-    // 更新風險標籤
+    const hasInsightText = value => typeof value === 'string' && value.trim()
+        && !/^(未披露|未提供|資料不足|無資料|暫無)/.test(value.trim());
+    const oneLiner = hasInsightText(ai.one_liner) ? ai.one_liner.trim() : '';
+    document.getElementById('one-liner').textContent = oneLiner;
+    const risks = Array.isArray(ai.risks) ? [...new Set(ai.risks.filter(hasInsightText).map(value => value.trim()))] : [];
     const riskContainer = document.getElementById('risk-container');
-    if (ai.risks) {
-        riskContainer.innerHTML = ai.risks.map(r => `<div><span class="risk-tag">RISK</span> <span style="font-size:14px; color:#475569;">${r}</span></div>`).join('');
-    }
+    riskContainer.replaceChildren();
+    risks.forEach((risk, index) => {
+        const row = document.createElement('div');
+        row.className = 'insight-risk';
+        const number = document.createElement('span');
+        number.className = 'insight-risk-number';
+        number.setAttribute('aria-hidden', 'true');
+        number.textContent = String(index + 1).padStart(2, '0');
+        const copy = document.createElement('p');
+        copy.textContent = risk;
+        row.append(number, copy);
+        riskContainer.appendChild(row);
+    });
+    document.getElementById('insight-risks').hidden = risks.length === 0;
+    document.querySelector('.ai-insight-card').hidden = !oneLiner && risks.length === 0;
 
     // --- 3. 初始化容器 ---
     const container = document.getElementById('dynamic-content');
