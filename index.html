@@ -678,6 +678,11 @@ function buildMetricReading(metricId, snapshots, data, periods, insight) {
     const reasons = Array.isArray(insight?.related_reasons) ? [...new Set(insight.related_reasons
         .filter(value => typeof value === 'string' && value.trim()
             && !/^(未披露|未提供|資料不足|無資料|暫無)|升級 Pro 解鎖/.test(value.trim())).map(value => value.trim()))].slice(0, 2) : [];
+    const analysis = [insight?.summary, ...(Array.isArray(insight?.bullets) ? insight.bullets.slice(0, 2) : [])];
+    const uniqueAnalysis = [...new Set(analysis.filter(value => typeof value === 'string' && value.trim()
+        && !/^(未披露|未提供|資料不足|無資料|暫無)|升級 Pro 解鎖|尚無獨立解讀/.test(value.trim()))
+        .map(value => value.trim()))];
+    if (snapshots[metricId]?.latest && uniqueAnalysis.length) meaning = uniqueAnalysis.join(' ');
     return { meaning, reasons, watch: watches[metricId] || '' };
 }
 
