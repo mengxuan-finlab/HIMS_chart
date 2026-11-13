@@ -338,7 +338,8 @@
 const SUPABASE_URL = "https://zlkexplsleznuebighte.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpsa2V4cGxzbGV6bnVlYmlnaHRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MzAwNjUsImV4cCI6MjA4MTAwNjA2NX0.HPVn3jcN88M4U3-RCVW-YO-b65rDOKv6pxEaVWwbm68"; // 使用你真正的 eyJ... 金鑰
 // 💡 初始化 Supabase 客戶端
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const demoMode = new URLSearchParams(window.location.search).get('demo') === '1';
+const supabaseClient = demoMode ? null : supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- 2. 取得網址參數 ---
 const urlParams = new URLSearchParams(window.location.search);
 const currentSymbol = urlParams.get('symbol') || 'PLTR'; // 預設改為 PLTR 以便測試
@@ -399,6 +400,20 @@ const reportStructure = [
 
 async function fetchCloudReport() {
     try {
+        if (demoMode) {
+            const response = await fetch('https://dongcaibao.onrender.com/api/demo-reports/financial', {
+                credentials: 'omit', signal: AbortSignal.timeout(20000)
+            });
+            const demo = await response.json();
+            if (!response.ok) throw new Error(demo.error || '示範報告暫時無法讀取。');
+            if (demo.symbol !== 'AAPL' || demo.report_json?.symbol !== 'AAPL') throw new Error('示範資料不正確。');
+            renderDashboard(demo.report_json);
+            const notice = document.createElement('p');
+            notice.className = 'meta-info';
+            notice.textContent = 'AAPL 固定示範報告，非即時資料。';
+            document.querySelector('.header').appendChild(notice);
+            return;
+        }
         // 1. 🎯 核心修改：從網址抓取 Token 並「手動登入」
         const urlParams = new URLSearchParams(window.location.search);
         const access = urlParams.get('access_token');
@@ -415,7 +430,7 @@ async function fetchCloudReport() {
         // 2. 接下來才是原本的邏輯
         const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
-        if (authError || !user) {
+        if (authError || !user || user.is_anonymous) {
             console.warn("使用者未登入");
             document.body.innerHTML = `<main class="page"><h1>🔒 請先登入</h1><p>「懂才抱」需要確認你的身份以顯示專屬分析報告。</p></main>`;
             return;
@@ -438,6 +453,8 @@ async function fetchCloudReport() {
         }
     } catch (err) {
         console.error("系統讀取錯誤:", err);
+        const container = document.getElementById('dynamic-content');
+        if (container) container.textContent = err.message || '報告暫時無法讀取，請稍後再試。';
     }
 }
 
