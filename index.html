@@ -4,8 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HIMS 財報全自動化分析儀表板</title>
+  <script>
+    const cleanUrl = new URL(window.location.href);
+    if (cleanUrl.searchParams.has('access_token') || cleanUrl.searchParams.has('refresh_token')) {
+      cleanUrl.searchParams.delete('access_token');
+      cleanUrl.searchParams.delete('refresh_token');
+      history.replaceState(null, '', cleanUrl.href);
+    }
+  </script>
+  <script src="report-bridge.js?v=20261114-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -334,15 +342,10 @@
 </main>
 
 <script>
-// --- 1. Supabase 配置 (請務必使用你剛才設定好 RLS 的那個專案) ---
-const SUPABASE_URL = "https://zlkexplsleznuebighte.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpsa2V4cGxzbGV6bnVlYmlnaHRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MzAwNjUsImV4cCI6MjA4MTAwNjA2NX0.HPVn3jcN88M4U3-RCVW-YO-b65rDOKv6pxEaVWwbm68"; // 使用你真正的 eyJ... 金鑰
-// 💡 初始化 Supabase 客戶端
 const demoMode = new URLSearchParams(window.location.search).get('demo') === '1';
-const supabaseClient = demoMode ? null : supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- 2. 取得網址參數 ---
 const urlParams = new URLSearchParams(window.location.search);
-const currentSymbol = urlParams.get('symbol') || 'PLTR'; // 預設改為 PLTR 以便測試
+const currentSymbol = (urlParams.get('symbol') || 'PLTR').trim().toUpperCase();
 
 const metricMeta = {
     revenue: { title: "總營收 (Total Revenue)", desc: "反映公司在特定期間內的銷售規模。", unit: "M USD" },
@@ -398,6 +401,17 @@ const reportStructure = [
     }
 ];
 
+function showReportMessage(title, message) {
+    const main = document.createElement('main');
+    main.className = 'page';
+    const heading = document.createElement('h1');
+    heading.textContent = title;
+    const paragraph = document.createElement('p');
+    paragraph.textContent = message;
+    main.append(heading, paragraph);
+    document.body.replaceChildren(main);
+}
+
 async function fetchCloudReport() {
     try {
         if (demoMode) {
@@ -414,43 +428,12 @@ async function fetchCloudReport() {
             document.querySelector('.header').appendChild(notice);
             return;
         }
-        // 1. 🎯 核心修改：從網址抓取 Token 並「手動登入」
-        const urlParams = new URLSearchParams(window.location.search);
-        const access = urlParams.get('access_token');
-        const refresh = urlParams.get('refresh_token');
-
-        // 如果有傳 Token 過來，就先用它設定 Session
-        if (access && refresh) {
-            await supabaseClient.auth.setSession({
-                access_token: access,
-                refresh_token: refresh
-            });
-        }
-
-        // 2. 接下來才是原本的邏輯
-        const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-
-        if (authError || !user || user.is_anonymous) {
-            console.warn("使用者未登入");
-            document.body.innerHTML = `<main class="page"><h1>🔒 請先登入</h1><p>「懂才抱」需要確認你的身份以顯示專屬分析報告。</p></main>`;
+        if (!/^[A-Z][A-Z0-9.^-]{0,19}$/.test(currentSymbol)) {
+            showReportMessage('股票代碼格式不正確', '請使用有效格式的美股代碼，例如 AAPL 或 BRK.B。');
             return;
         }
-
-        // 3. 抓取資料庫（使用 user.id）
-        const { data: result, error: dbError } = await supabaseClient
-            .from('tracked_stocks')
-            .select('report_json')
-            .eq('symbol', currentSymbol.toUpperCase())
-            .eq('user_id', user.id) 
-            .maybeSingle(); 
-
-        if (dbError) throw dbError;
-
-        if (result && result.report_json) {
-            renderDashboard(result.report_json);
-        } else {
-            document.body.innerHTML = `<main class="page"><h1>❌ 找不到 ${currentSymbol} 的報告</h1><p>請確認是否已新增此股票，或稍等後端 AI 生成資料。</p></main>`;
-        }
+        const report = await window.DcbReportBridge.receiveReport('US', currentSymbol);
+        renderDashboard(report);
     } catch (err) {
         console.error("系統讀取錯誤:", err);
         const container = document.getElementById('dynamic-content');

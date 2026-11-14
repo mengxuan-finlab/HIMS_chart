@@ -4,8 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>台股月營收與季報追蹤</title>
+  <script>
+    const cleanUrl = new URL(window.location.href);
+    if (cleanUrl.searchParams.has('access_token') || cleanUrl.searchParams.has('refresh_token')) {
+      cleanUrl.searchParams.delete('access_token');
+      cleanUrl.searchParams.delete('refresh_token');
+      history.replaceState(null, '', cleanUrl.href);
+    }
+  </script>
+  <script src="report-bridge.js?v=20261114-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --primary: #7c3aed;
@@ -202,12 +210,9 @@
   </main>
 
   <script>
-    const SUPABASE_URL = "https://zlkexplsleznuebighte.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpsa2V4cGxzbGV6bnVlYmlnaHRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MzAwNjUsImV4cCI6MjA4MTAwNjA2NX0.HPVn3jcN88M4U3-RCVW-YO-b65rDOKv6pxEaVWwbm68";
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const urlParams = new URLSearchParams(window.location.search);
-    const currentSymbol = (urlParams.get("symbol") || "2330").toUpperCase();
+    const currentSymbol = (urlParams.get("symbol") || "2330").trim().toUpperCase();
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -297,32 +302,11 @@
     }
 
     async function fetchReport() {
-      const access = urlParams.get("access_token");
-      const refresh = urlParams.get("refresh_token");
-      if (access && refresh) {
-        await supabaseClient.auth.setSession({ access_token: access, refresh_token: refresh });
+      if (!/^[0-9]{4}(?:\.(?:TW|TWO))?$/.test(currentSymbol)) {
+        throw new Error('股票代碼格式不正確，請使用四位數台股代碼，例如 2330。');
       }
-
-      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-      if (authError || !user) {
-        document.body.innerHTML = `<main><div class="empty"><h1>請先登入</h1><p>需要確認身份才能顯示專屬台股報告。</p></div></main>`;
-        return;
-      }
-
-      const { data, error } = await supabaseClient
-        .from("tracked_stocks")
-        .select("report_json")
-        .eq("symbol", currentSymbol)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!data?.report_json) {
-        document.body.innerHTML = `<main><div class="empty"><h1>找不到 ${escapeHtml(currentSymbol)} 的台股報告</h1><p>請確認台股圖表資料是否已生成完成。</p></div></main>`;
-        return;
-      }
-
-      renderReport(data.report_json);
+      const report = await window.DcbReportBridge.receiveReport('TW', currentSymbol);
+      renderReport(report);
     }
 
     function renderReport(report) {
