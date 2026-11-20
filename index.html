@@ -196,6 +196,27 @@
     .metric-header .metric-name { margin: 0; }
     .metric-period-controls { margin: 0; gap: 4px; padding: 3px; background: #f3f5f9; border-radius: 9px; }
     .metric-period-controls button { padding: 7px 12px; font-size: 12px; border-color: transparent; background: transparent; }
+    .ttm-snapshot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px; margin: 24px 0 30px; }
+    .ttm-hero { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; min-width: 0; padding: 30px; border: 1px solid #e4e9f1; border-radius: 14px; background: linear-gradient(135deg, var(--metric-soft), #fff); }
+    .ttm-hero::after { content: ''; position: absolute; width: 150px; height: 150px; right: -65px; top: -70px; border: 24px solid var(--metric-accent); border-radius: 50%; opacity: .06; pointer-events: none; }
+    .ttm-badge { border: 1px solid var(--metric-accent); border-radius: 5px; padding: 3px 7px; color: var(--metric-accent); font-size: 10px; letter-spacing: .12em; }
+    .ttm-hero-label { color: #718096; font-size: 12px; margin-top: 20px; }
+    .ttm-value { color: #243e5b; font-size: clamp(32px, 5vw, 48px); line-height: 1.2; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.04em; margin: 9px 0 15px; overflow-wrap: anywhere; }
+    .ttm-hero small { color: #8290a3; font-size: 11px; line-height: 1.8; }
+    .ttm-reference { min-width: 0; padding: 22px; border: 1px solid #e4e9f1; border-radius: 14px; background: #fff; }
+    .ttm-reference h4 { color: #344b66; margin: 0 0 6px; font-size: 13px; }
+    .ttm-reference p { margin: 0 0 18px; color: #8290a3; font-size: 11px; line-height: 1.8; }
+    .ttm-reference-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 22px; }
+    .ttm-reference-stats dt { color: #8290a3; font-size: 11px; margin-bottom: 6px; }
+    .ttm-reference-stats dd { color: #344b66; font-size: 16px; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+    .ttm-history { display: grid; gap: 10px; }
+    .ttm-history-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 76px; align-items: center; gap: 10px; color: #718096; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .ttm-history-row > span:first-child { white-space: nowrap; }
+    .ttm-history-row strong { text-align: right; color: #50647e; font-weight: 500; }
+    .ttm-history-track { height: 7px; border-radius: 4px; background: #eef2f7; overflow: hidden; }
+    .ttm-history-bar { display: block; height: 100%; background: var(--metric-accent); border-radius: 4px; opacity: .65; }
+    .ttm-history-bar[data-negative="true"] { background: #b48a6d; }
+    @media (max-width: 640px) { .ttm-snapshot { grid-template-columns: minmax(0, 1fr); gap: 12px; } .ttm-hero, .ttm-reference { padding: 22px; } .ttm-history-row { grid-template-columns: 76px minmax(0, 1fr) 65px; gap: 6px; } }
     .metric-card {
       border: 1px solid var(--card-border);
       border-radius: 16px;
@@ -523,6 +544,25 @@ function renderMetricSnapshot(metricId, snapshot) {
     return `<dl class="metric-snapshot" aria-label="${escapeMetricText(metricMeta[metricId]?.title || metricId)}數字快照">${cells}</dl>`;
 }
 
+function renderTtmSnapshot(metricId, point, annualRows, asOf) {
+    const history = (Array.isArray(annualRows) ? annualRows : []).filter(row => row
+        && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.value))
+        .slice().sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
+    const label = escapeMetricText(metricMeta[metricId]?.title || metricId);
+    const format = value => escapeMetricText(formatMetricValue(metricId, value));
+    const latest = history[history.length - 1];
+    const range = history.length > 1
+        ? `${format(Math.min(...history.map(row => row.value)))} – ${format(Math.max(...history.map(row => row.value)))}`
+        : latest ? format(latest.value) : '';
+    const maxMagnitude = Math.max(1, ...history.map(row => Math.abs(row.value)));
+    const bars = history.map(row => `<div class="ttm-history-row"><span>${escapeMetricText(row.date)}</span><span class="ttm-history-track" aria-hidden="true"><span class="ttm-history-bar" data-negative="${row.value < 0}" style="width:${Math.abs(row.value) / maxMagnitude * 100}%"></span></span><strong>${format(row.value)}</strong></div>`).join('');
+    return `<section class="ttm-snapshot" aria-label="${label}近十二個月快照">
+        <div class="ttm-hero"><span class="ttm-badge">TTM SNAPSHOT</span><span class="ttm-hero-label">近十二個月</span><strong class="ttm-value">${format(point.value)}</strong><small>當期快照，不以單一數值繪製趨勢${/^\d{4}-\d{2}-\d{2}$/.test(asOf || '') ? `<br>資料擷取日期：${escapeMetricText(asOf)}` : ''}</small></div>
+        <div class="ttm-reference"><h4>年度歷史參考</h4><p>年度值與目前 TTM 涵蓋期間不同，不作同比或高低估評分。</p>
+        ${latest ? `<dl class="ttm-reference-stats"><div><dt>最近年度 · ${escapeMetricText(latest.date)}</dt><dd>${format(latest.value)}</dd></div><div><dt>${history.length > 1 ? `近 ${history.length} 個年度區間` : '可取得年度值'}</dt><dd>${range}</dd></div></dl><div class="ttm-history" aria-label="年度歷史數值">${bars}</div>` : '<p>尚無可用的年度參考資料；目前僅呈現 TTM 快照。</p>'}
+        </div></section>`;
+}
+
 function buildMetricReading(metricId, snapshots, data, periods, insight) {
     const meanings = {
         revenue: '營收反映需求規模，但成長能否轉成股東收益，還要一起看毛利率與費用負擔。',
@@ -831,13 +871,19 @@ function renderDashboard(json) {
 
 
                 const reading = buildMetricReading(metricId, snapshots, data, view.periods, aiInsight);
-                const theme = {
+                const theme = (sec.id === 'valuation' ? {
+                    roe: { color: '#8c78aa', soft: '#f3eff8', fill: 'rgba(140,120,170,.08)' },
+                    roa: { color: '#328e86', soft: '#edf7f4', fill: 'rgba(50,142,134,.08)' },
+                    pe: { color: '#64819e', soft: '#eef3f8', fill: 'rgba(100,129,158,.08)' },
+                    peg: { color: '#a1855c', soft: '#f8f3ec', fill: 'rgba(161,133,92,.08)' }
+                }[metricId] : null) || {
                     'income-statement': { color: '#5965bc', soft: '#f0f1fa', fill: 'rgba(89,101,188,.08)' },
                     'balance-sheet': { color: '#9278af', soft: '#f4f0f8', fill: 'rgba(146,120,175,.08)' },
                     'cash-flow-statement': { color: '#258f84', soft: '#edf7f4', fill: 'rgba(37,143,132,.08)' },
                     valuation: { color: '#64819e', soft: '#eef3f8', fill: 'rgba(100,129,158,.08)' }
                 }[sec.id];
                 const readingBlock = (number, title, content, className = '') => `<div class="metric-reading-block ${className}"><span class="metric-reading-number" aria-hidden="true">${number}</span><div><h4>${title}</h4>${content}</div></div>`;
+                const singleTtm = sec.id === 'valuation' && mData.length === 1 && mData[0].date === 'TTM';
 
                 card.style.setProperty('--metric-accent', theme.color);
                 card.style.setProperty('--metric-soft', theme.soft);
@@ -848,14 +894,15 @@ function renderDashboard(json) {
                         <summary>指標定義與說明</summary>
                         <div class="desc-content">${metricMeta[metricId]?.desc || ""}</div>
                     </details>
-                    ${renderMetricSnapshot(metricId, snapshots[metricId])}
-                    <div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>
+                    ${singleTtm ? renderTtmSnapshot(metricId, mData[0], dual ? original.views.annual.data[metricId] : [], original.as_of) : renderMetricSnapshot(metricId, snapshots[metricId])}
+                    ${singleTtm ? '' : `<div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>`}
                     <div class="metric-reading">
                         ${reading.meaning ? readingBlock('01', '這代表什麼', `<p>${escapeMetricText(reading.meaning)}</p>`) : ''}
                         ${reading.reasons.length ? readingBlock('02', '變動原因', `<ul>${reading.reasons.map(reason => `<li>${escapeMetricText(reason)}</li>`).join('')}</ul>`) : ''}
                         ${reading.watch ? readingBlock('03', '接下來看什麼', `<p>${escapeMetricText(reading.watch)}</p>`, 'reading-watch') : ''}
                     </div>
                 `;
+                if (singleTtm) return;
                 const ctx = content.querySelector('canvas').getContext('2d');
                 const labels = mData.map(i => i.date);
                 const values = mData.map(i => i.value);
