@@ -557,8 +557,8 @@ function renderTtmSnapshot(metricId, point, annualRows, asOf) {
     const maxMagnitude = Math.max(1, ...history.map(row => Math.abs(row.value)));
     const bars = history.map(row => `<div class="ttm-history-row"><span>${escapeMetricText(row.date)}</span><span class="ttm-history-track" aria-hidden="true"><span class="ttm-history-bar" data-negative="${row.value < 0}" style="width:${Math.abs(row.value) / maxMagnitude * 100}%"></span></span><strong>${format(row.value)}</strong></div>`).join('');
     return `<section class="ttm-snapshot" aria-label="${label}近十二個月快照">
-        <div class="ttm-hero"><span class="ttm-badge">TTM SNAPSHOT</span><span class="ttm-hero-label">近十二個月</span><strong class="ttm-value">${format(point.value)}</strong><small>當期快照，不以單一數值繪製趨勢${/^\d{4}-\d{2}-\d{2}$/.test(asOf || '') ? `<br>資料擷取日期：${escapeMetricText(asOf)}` : ''}</small></div>
-        <div class="ttm-reference"><h4>年度歷史參考</h4><p>年度值與目前 TTM 涵蓋期間不同，不作同比或高低估評分。</p>
+        <div class="ttm-hero"><span class="ttm-badge">TTM SNAPSHOT</span><span class="ttm-hero-label">近十二個月</span><strong class="ttm-value">${format(point.value)}</strong>${/^\d{4}-\d{2}-\d{2}$/.test(asOf || '') ? `<small>資料擷取日期：${escapeMetricText(asOf)}</small>` : ''}</div>
+        <div class="ttm-reference"><h4>年度歷史參考</h4>
         ${latest ? `<dl class="ttm-reference-stats"><div><dt>最近年度 · ${escapeMetricText(latest.date)}</dt><dd>${format(latest.value)}</dd></div><div><dt>${history.length > 1 ? `近 ${history.length} 個年度區間` : '可取得年度值'}</dt><dd>${range}</dd></div></dl><div class="ttm-history" aria-label="年度歷史數值">${bars}</div>` : '<p>尚無可用的年度參考資料；目前僅呈現 TTM 快照。</p>'}
         </div></section>`;
 }
