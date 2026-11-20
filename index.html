@@ -192,6 +192,10 @@
     .period-controls button[aria-pressed="true"] { background: #243a55; color: #fff; border-color: #243a55; }
     .period-controls button:focus-visible { outline: 3px solid #b6a7d8; outline-offset: 2px; }
     .period-controls p, .period-note { flex-basis: 100%; margin: 6px 0; color: #718096; font-size: 12px; line-height: 1.8; }
+    .metric-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .metric-header .metric-name { margin: 0; }
+    .metric-period-controls { margin: 0; gap: 4px; padding: 3px; background: #f3f5f9; border-radius: 9px; }
+    .metric-period-controls button { padding: 7px 12px; font-size: 12px; border-color: transparent; background: transparent; }
     .metric-card {
       border: 1px solid var(--card-border);
       border-radius: 16px;
@@ -225,7 +229,7 @@
       .metric-snapshot > div { padding: 14px 16px; }
       .metric-snapshot dd { font-size: 22px; }
     }
-    
+
     details { margin-bottom: 20px; }
     details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--primary); list-style: none; }
     details summary::before { content: "▶ "; font-size: 10px; }
@@ -273,7 +277,7 @@
       background: #f0f9ff; /* Pro 版的藍色背景 */
       border: 1px solid #bae6fd;
     }
-    
+
     .reason-section.locked {
       background: #f8fafc; /* 免費版的灰色背景 */
       border: 1px dashed #cbd5e1;
@@ -587,7 +591,7 @@ function buildMetricReading(metricId, snapshots, data, periods, insight) {
     return { meaning, reasons, watch: watches[metricId] || '' };
 }
 
-function renderDashboard(json, selectedPeriod = 'quarter') {
+function renderDashboard(json) {
     // --- 1. 資料安全性防護 ---
     if (!json || !json.data || !json.ai) {
         console.error("載入的 JSON 格式不正確");
@@ -597,36 +601,27 @@ function renderDashboard(json, selectedPeriod = 'quarter') {
     const original = json;
     const previousSection = document.querySelector('.report-panel.active')?.id;
     const dual = json.financialFormat === 'dual-period-v1' && json.views?.quarter && json.views?.annual;
-    if (dual) json = { ...json, ...json.views[selectedPeriod] };
+    if (dual) json = { ...json, ...json.views.quarter };
     document.querySelectorAll('#dynamic-content canvas').forEach(canvas => Chart.getChart(canvas)?.destroy());
     const controls = document.getElementById('period-controls');
     controls.replaceChildren();
-    if (dual) {
-        for (const [period, label] of [['quarter', '季度 · 最近八季'], ['annual', '年度 · 最近五年']]) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = label;
-            button.setAttribute('aria-pressed', String(period === selectedPeriod));
-            button.addEventListener('click', () => renderDashboard(original, period));
-            controls.appendChild(button);
-        }
-    }
     const hint = document.createElement('p');
     hint.textContent = dual
-        ? selectedPeriod === 'quarter' ? '損益與現金流為單季；資產負債為季末快照。報酬率與估值另列 TTM。' : '損益與現金流為全年；資產負債為年末快照，報酬率與估值採年度口徑。'
-        : '此報告保留原資料頻率，各指標期間見數值卡；重新生成後可使用季度／年度切換。';
+        ? '各指標可獨立切換期間；本頁總覽以季度為準，報酬率與估值另列 TTM。'
+        : '此報告保留原資料頻率，各指標期間見數值卡；重新生成後可使用指標內的期間切換。';
     controls.appendChild(hint);
+    document.getElementById('ai-insight-title').textContent = dual ? 'AI 財務摘要 · 季度總覽' : 'AI 財務摘要';
     const data = json.data;
     const ai = json.ai;
 
     // --- 2. 更新標題與時間 (修正點：增加日期防護避免崩潰) ---
     document.querySelector('.page-title').innerText = `${json.symbol} 財報分析儀表板`;
-    
+
     // 如果 ai_generated_at 缺失，改用 as_of 作為備案
     const rawDate = json.ai_generated_at || json.as_of || "2026-01-01";
     const genDate = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
     document.getElementById('update-info').innerText = `數據截止: ${json.as_of} | AI 生成於: ${genDate}`;
-    
+
     const hasInsightText = value => typeof value === 'string' && value.trim()
         && !/^(未披露|未提供|資料不足|無資料|暫無)/.test(value.trim());
     const oneLiner = hasInsightText(ai.one_liner) ? ai.one_liner.trim() : '';
@@ -651,10 +646,10 @@ function renderDashboard(json, selectedPeriod = 'quarter') {
 
     // --- 3. 初始化容器 ---
     const container = document.getElementById('dynamic-content');
-    container.innerHTML = ''; 
+    container.innerHTML = '';
 
-    const getProcessedData = (id) => {
-        const raw = data[id];
+    const getProcessedData = (id, source = data) => {
+        const raw = source[id];
         if (!Array.isArray(raw)) return null;
         const valid = raw.filter(item => item && Number.isFinite(item.value));
         const ttm = valid.find(i => i.date === "TTM");
@@ -691,7 +686,7 @@ function renderDashboard(json, selectedPeriod = 'quarter') {
         const summary = document.createElement('section');
         summary.className = 'period-summary';
         summary.setAttribute('aria-label', '本期財報重點');
-        summary.innerHTML = `<div class="period-summary-heading"><h2>本期財報重點</h2><span>FINANCIAL BRIEF</span></div>
+        summary.innerHTML = `<div class="period-summary-heading"><h2>${dual ? '本期財報重點 · 季度總覽' : '本期財報重點'}</h2><span>FINANCIAL BRIEF</span></div>
             <div class="period-summary-grid">${summaryCards.map(([label, title, detail]) =>
                 `<article class="period-summary-card"><div class="period-summary-label">${escapeMetricText(label)}</div><h3>${escapeMetricText(title)}</h3><p>${escapeMetricText(detail)}</p></article>`).join('')}</div>`;
         container.appendChild(summary);
@@ -750,147 +745,169 @@ function renderDashboard(json, selectedPeriod = 'quarter') {
         container.appendChild(panel);
 
         sec.metrics.forEach(metricId => {
-            const mData = getProcessedData(metricId);
-            
-            // --- 修正點：對齊資料鍵值 (Gross Profit vs Gross Margin) ---
-            // 在 renderDashboard 迴圈內部找到這一段並替換
-            let aiInsight = ai.by_metric[metricId];
-
-            // 🎯 自動對齊邏輯：如果找不到精確 ID，就去對應的大類別找
-            if (!aiInsight) {
-                // 1. 處理損益表名稱不符
-                if (metricId === 'gross_profit') aiInsight = ai.by_metric['gross_margin'];
-                if (metricId === 'net_income') aiInsight = ai.by_metric['net_income_and_margin'] || ai.by_metric['net_margin'];
-
-                // 2. 處理 HIMS 把現金流指標合併的情況
-                const cashFlowMetrics = ['operating_cash_flow', 'free_cash_flow', 'capEX_OCF', 'ocf_netincome'];
-                if (cashFlowMetrics.includes(metricId)) {
-                    aiInsight = ai.by_metric['cash_flow']; 
-                }
-
-                // 3. 處理 HIMS 把估值指標合併的情況
-                const valuationMetrics = ['roe', 'roa', 'pe', 'peg'];
-                if (valuationMetrics.includes(metricId)) {
-                    aiInsight = ai.by_metric['valuation_metrics'];
-                }
-                // 🎯 4. 處理「資產負債與償債」類 (預留對應)
-                const solvencyGroup = ['total_equity', 'current_ratio', 'long_term_solvency'];
-                if (solvencyGroup.includes(metricId)) {
-                    // 嘗試抓取可能的大類別名稱
-                    aiInsight = ai.by_metric['balance_sheet'] || ai.by_metric['solvency'] || ai.by_metric['financial_condition'];
-                }
-            }
-
-            // 🎯 只要有數據 (mData) 就一定要畫圖，不能 return 掉
-            if (!mData) {
-                const empty = document.createElement('div');
-                empty.className = 'metric-card';
-                const title = document.createElement('h3');
-                title.className = 'metric-name';
-                title.textContent = metricMeta[metricId]?.title || metricId;
-                const message = document.createElement('p');
-                message.className = 'period-note';
-                message.textContent = '此期間沒有足夠的同口徑資料，暫不繪圖或套用其他期間的 AI 解讀。';
-                empty.append(title, message);
-                panel.appendChild(empty);
-                return;
-            }
-
-            // 🎯 如果經過所有對齊邏輯後還是 null (就像現在 HIMS 的負債表)
-            // 我們就補上一個預設的物件，這樣圖表就會出來，只是文字會顯示預設內容
-            if (!aiInsight) {
-                aiInsight = {
-                    summary: "AI 目前針對此指標尚無獨立解讀，請參考圖表數據趨勢。",
-                    bullets: [],
-                    related_reasons: []
-                };
-            }
-
-            // 移除原本那行：if (!mData || !aiInsight) return;
-
-            const reading = buildMetricReading(metricId, snapshots, data, json.periods, aiInsight);
-            const theme = {
-                'income-statement': { color: '#5965bc', soft: '#f0f1fa', fill: 'rgba(89,101,188,.08)' },
-                'balance-sheet': { color: '#9278af', soft: '#f4f0f8', fill: 'rgba(146,120,175,.08)' },
-                'cash-flow-statement': { color: '#258f84', soft: '#edf7f4', fill: 'rgba(37,143,132,.08)' },
-                valuation: { color: '#64819e', soft: '#eef3f8', fill: 'rgba(100,129,158,.08)' }
-            }[sec.id];
-            const readingBlock = (number, title, content, className = '') => `<div class="metric-reading-block ${className}"><span class="metric-reading-number" aria-hidden="true">${number}</span><div><h4>${title}</h4>${content}</div></div>`;
-
-            // --- 生成卡片 HTML ---
             const card = document.createElement('div');
             card.className = 'metric-card';
             card.id = `metric-${metricId}`;
-            card.style.setProperty('--metric-accent', theme.color);
-            card.style.setProperty('--metric-soft', theme.soft);
-            card.innerHTML = `
-                <div class="metric-name">${metricMeta[metricId]?.title || metricId}</div>
-                ${dual && metricId === 'long_term_solvency' ? `<p class="period-note">${selectedPeriod === 'quarter' ? '季末總債務／截至該季的近四季營運現金流' : '年末總債務／全年營運現金流'}</p>` : ''}
-                <details>
-                    <summary>指標定義與說明</summary>
-                    <div class="desc-content">${metricMeta[metricId]?.desc || ""}</div>
-                </details>
-                ${renderMetricSnapshot(metricId, snapshots[metricId])}
-                <div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>
-                <div class="metric-reading">
-                    ${reading.meaning ? readingBlock('01', '這代表什麼', `<p>${escapeMetricText(reading.meaning)}</p>`) : ''}
-                    ${reading.reasons.length ? readingBlock('02', '變動原因', `<ul>${reading.reasons.map(reason => `<li>${escapeMetricText(reason)}</li>`).join('')}</ul>`) : ''}
-                    ${reading.watch ? readingBlock('03', '接下來看什麼', `<p>${escapeMetricText(reading.watch)}</p>`, 'reading-watch') : ''}
-                </div>
-            `;
+            const header = document.createElement('div');
+            header.className = 'metric-header';
+            const title = document.createElement('h3');
+            title.className = 'metric-name';
+            title.textContent = metricMeta[metricId]?.title || metricId;
+            header.appendChild(title);
+            const content = document.createElement('div');
+            const buttons = [];
+            if (dual) {
+                const toggle = document.createElement('div');
+                toggle.className = 'period-controls metric-period-controls';
+                toggle.setAttribute('role', 'group');
+                toggle.setAttribute('aria-label', `${title.textContent}資料期間`);
+                for (const [period, label] of [['quarter', sec.id === 'valuation' ? 'TTM' : '季度'], ['annual', '年度']]) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = label;
+                    button.dataset.period = period;
+                    button.setAttribute('aria-controls', `metric-content-${metricId}`);
+                    button.addEventListener('click', () => {
+                        if (card.dataset.period !== period) renderMetric(period);
+                    });
+                    toggle.appendChild(button);
+                    buttons.push(button);
+                }
+                header.appendChild(toggle);
+            }
+            content.id = `metric-content-${metricId}`;
+            card.append(header, content);
             panel.appendChild(card);
 
-            // --- 初始化 Chart.js ---
-            const ctx = document.getElementById(`chart-${metricId}`).getContext('2d');
-            const labels = mData.map(i => i.date);
-            const values = mData.map(i => i.value);
+            const renderMetric = (selectedPeriod = 'quarter') => {
+                const view = dual ? original.views[selectedPeriod] : json;
+                const data = view.data;
+                const ai = view.ai;
+                const snapshots = Object.fromEntries(Object.keys(metricMeta).map(id =>
+                    [id, getMetricSnapshot(data[id], id, view.periods)]));
+                const canvas = content.querySelector('canvas');
+                if (canvas) Chart.getChart(canvas)?.destroy();
+                card.dataset.period = selectedPeriod;
+                buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.period === selectedPeriod)));
+                content.replaceChildren();
+                const mData = getProcessedData(metricId, data);
 
-            if (metricId === 'gross_profit' || metricId === 'net_income') {
-                const marginKey = metricId === 'gross_profit' ? 'gross_margin' : 'net_margin';
-                const marginData = getProcessedData(marginKey);
-                
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            { label: metricId === 'gross_profit' ? '毛利金額' : '淨利金額', data: values, backgroundColor: 'rgba(89,101,188,.55)', yAxisID: 'y', order: 2 },
-                            { 
-                                label: metricId === 'gross_profit' ? '毛利率 (%)' : '淨利率 (%)',
-                                data: labels.map(date => marginData?.find(point => point.date === date)?.value ?? null),
-                                type: 'line', borderColor: '#258f84',
-                                borderWidth: 2.5, pointBackgroundColor: '#258f84',
-                                pointRadius: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? 8 : 4, tension: 0.4, yAxisID: 'y1', order: 1 
-                            }
-                        ]
-                    },
-                    options: getChartOptions('M USD', '%', true, values, 1e6)
-                });
-            } else {
-                const isBar = ['eps_diluted'].includes(metricId);
-                new Chart(ctx, {
-                    type: isBar ? 'bar' : 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: metricMeta[metricId]?.title || metricId,
-                            data: values,
-                            borderColor: theme.color,
-                            backgroundColor: isBar ? theme.color : theme.fill,
-                            borderWidth: 2.5,
-                            fill: !isBar, tension: 0.2,
-                            pointRadius: c => c.dataIndex === values.length - 1 ? 5 : 3,
-                            pointBackgroundColor: theme.color,
-                            pointBorderColor: '#fff', pointBorderWidth: 2,
-                        }]
-                    },
-                    options: getChartOptions(metricMeta[metricId]?.unit || "", '', false,
-                        metricMeta[metricId]?.unit === 'M USD' || ['operating_cash_flow', 'free_cash_flow'].includes(metricId) ? values : null,
-                        metricMeta[metricId]?.unit === 'M USD' ? 1e6 : 1,
-                        { color: theme.color, text: formatMetricValue(metricId, values[values.length - 1]) }),
-                    plugins: [latestMetricLabel]
-                });
-            }
+                let aiInsight = ai.by_metric[metricId];
+
+                if (!aiInsight) {
+                    if (metricId === 'gross_profit') aiInsight = ai.by_metric['gross_margin'];
+                    if (metricId === 'net_income') aiInsight = ai.by_metric['net_income_and_margin'] || ai.by_metric['net_margin'];
+
+                    const cashFlowMetrics = ['operating_cash_flow', 'free_cash_flow', 'capEX_OCF', 'ocf_netincome'];
+                    if (cashFlowMetrics.includes(metricId)) {
+                        aiInsight = ai.by_metric['cash_flow'];
+                    }
+
+                    const valuationMetrics = ['roe', 'roa', 'pe', 'peg'];
+                    if (valuationMetrics.includes(metricId)) {
+                        aiInsight = ai.by_metric['valuation_metrics'];
+                    }
+                    const solvencyGroup = ['total_equity', 'current_ratio', 'long_term_solvency'];
+                    if (solvencyGroup.includes(metricId)) {
+                        aiInsight = ai.by_metric['balance_sheet'] || ai.by_metric['solvency'] || ai.by_metric['financial_condition'];
+                    }
+                }
+
+                if (!mData) {
+                    const message = document.createElement('p');
+                    message.className = 'period-note';
+                    message.textContent = '此期間沒有足夠的同口徑資料，暫不繪圖或套用其他期間的 AI 解讀。';
+                    content.appendChild(message);
+                    return;
+                }
+
+                if (!aiInsight) {
+                    aiInsight = {
+                        summary: "AI 目前針對此指標尚無獨立解讀，請參考圖表數據趨勢。",
+                        bullets: [],
+                        related_reasons: []
+                    };
+                }
+
+
+                const reading = buildMetricReading(metricId, snapshots, data, view.periods, aiInsight);
+                const theme = {
+                    'income-statement': { color: '#5965bc', soft: '#f0f1fa', fill: 'rgba(89,101,188,.08)' },
+                    'balance-sheet': { color: '#9278af', soft: '#f4f0f8', fill: 'rgba(146,120,175,.08)' },
+                    'cash-flow-statement': { color: '#258f84', soft: '#edf7f4', fill: 'rgba(37,143,132,.08)' },
+                    valuation: { color: '#64819e', soft: '#eef3f8', fill: 'rgba(100,129,158,.08)' }
+                }[sec.id];
+                const readingBlock = (number, title, content, className = '') => `<div class="metric-reading-block ${className}"><span class="metric-reading-number" aria-hidden="true">${number}</span><div><h4>${title}</h4>${content}</div></div>`;
+
+                card.style.setProperty('--metric-accent', theme.color);
+                card.style.setProperty('--metric-soft', theme.soft);
+                content.innerHTML = `
+                    ${dual ? `<p class="period-note">${selectedPeriod === 'annual' ? '最近五年 · ' + (sec.id === 'balance-sheet' ? '年末快照' : '年度口徑') : sec.id === 'valuation' ? '近十二個月（TTM）快照，非單季數值' : '最近八季 · ' + (sec.id === 'balance-sheet' ? '季末快照' : '單季口徑')}</p>` : ''}
+                    ${dual && metricId === 'long_term_solvency' ? `<p class="period-note">${selectedPeriod === 'quarter' ? '季末總債務／截至該季的近四季營運現金流' : '年末總債務／全年營運現金流'}</p>` : ''}
+                    <details>
+                        <summary>指標定義與說明</summary>
+                        <div class="desc-content">${metricMeta[metricId]?.desc || ""}</div>
+                    </details>
+                    ${renderMetricSnapshot(metricId, snapshots[metricId])}
+                    <div class="chart-container"><canvas id="chart-${metricId}"></canvas></div>
+                    <div class="metric-reading">
+                        ${reading.meaning ? readingBlock('01', '這代表什麼', `<p>${escapeMetricText(reading.meaning)}</p>`) : ''}
+                        ${reading.reasons.length ? readingBlock('02', '變動原因', `<ul>${reading.reasons.map(reason => `<li>${escapeMetricText(reason)}</li>`).join('')}</ul>`) : ''}
+                        ${reading.watch ? readingBlock('03', '接下來看什麼', `<p>${escapeMetricText(reading.watch)}</p>`, 'reading-watch') : ''}
+                    </div>
+                `;
+                const ctx = content.querySelector('canvas').getContext('2d');
+                const labels = mData.map(i => i.date);
+                const values = mData.map(i => i.value);
+
+                if (metricId === 'gross_profit' || metricId === 'net_income') {
+                    const marginKey = metricId === 'gross_profit' ? 'gross_margin' : 'net_margin';
+                    const marginData = getProcessedData(marginKey, data);
+
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { label: metricId === 'gross_profit' ? '毛利金額' : '淨利金額', data: values, backgroundColor: 'rgba(89,101,188,.55)', yAxisID: 'y', order: 2 },
+                                {
+                                    label: metricId === 'gross_profit' ? '毛利率 (%)' : '淨利率 (%)',
+                                    data: labels.map(date => marginData?.find(point => point.date === date)?.value ?? null),
+                                    type: 'line', borderColor: '#258f84',
+                                    borderWidth: 2.5, pointBackgroundColor: '#258f84',
+                                    pointRadius: (c) => c.chart.data.labels[c.dataIndex] === "TTM" ? 8 : 4, tension: 0.4, yAxisID: 'y1', order: 1
+                                }
+                            ]
+                        },
+                        options: getChartOptions('M USD', '%', true, values, 1e6)
+                    });
+                } else {
+                    const isBar = ['eps_diluted'].includes(metricId);
+                    new Chart(ctx, {
+                        type: isBar ? 'bar' : 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: metricMeta[metricId]?.title || metricId,
+                                data: values,
+                                borderColor: theme.color,
+                                backgroundColor: isBar ? theme.color : theme.fill,
+                                borderWidth: 2.5,
+                                fill: !isBar, tension: 0.2,
+                                pointRadius: c => c.dataIndex === values.length - 1 ? 5 : 3,
+                                pointBackgroundColor: theme.color,
+                                pointBorderColor: '#fff', pointBorderWidth: 2,
+                            }]
+                        },
+                        options: getChartOptions(metricMeta[metricId]?.unit || "", '', false,
+                            metricMeta[metricId]?.unit === 'M USD' || ['operating_cash_flow', 'free_cash_flow'].includes(metricId) ? values : null,
+                            metricMeta[metricId]?.unit === 'M USD' ? 1e6 : 1,
+                            { color: theme.color, text: formatMetricValue(metricId, values[values.length - 1]) }),
+                        plugins: [latestMetricLabel]
+                    });
+                }
+            };
+            renderMetric();
         });
 
     });
