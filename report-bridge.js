@@ -13,6 +13,17 @@
     try {
       if (!object(report) || report.symbol !== symbol || !object(report.data) || !object(report.ai)
           || JSON.stringify(report).length > 1000000) return false;
+      if (report.views !== undefined) {
+        if (market !== 'US' || report.financialFormat !== 'dual-period-v1' || !object(report.views)
+            || Object.keys(report.views).sort().join(',') !== 'annual,quarter') return false;
+        for (const period of ['quarter', 'annual']) {
+          const view = report.views[period];
+          if (!object(view) || !object(view.periods)
+              || !['income', 'eps', 'balance', 'cashFlow'].every(key => view.periods[key] === period)
+              || view.periods.metrics !== (period === 'quarter' ? 'ttm' : 'annual')
+              || !validReport({ symbol, data: view.data, ai: view.ai }, symbol, market)) return false;
+        }
+      }
       const series = Object.entries(report.data);
       if (!series.length || series.length > 60 || !series.every(([key, points]) =>
         /^[a-zA-Z0-9_]+$/.test(key) && Array.isArray(points) && points.length <= 2000

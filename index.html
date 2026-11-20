@@ -12,7 +12,7 @@
       history.replaceState(null, '', cleanUrl.href);
     }
   </script>
-  <script src="report-bridge.js?v=20261114-1"></script>
+  <script src="report-bridge.js?v=20261120-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -187,6 +187,11 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
+    .period-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0; }
+    .period-controls button { padding: 10px 16px; border: 1px solid #dfe6ef; border-radius: 8px; background: #fff; color: #536780; font: inherit; cursor: pointer; }
+    .period-controls button[aria-pressed="true"] { background: #243a55; color: #fff; border-color: #243a55; }
+    .period-controls button:focus-visible { outline: 3px solid #b6a7d8; outline-offset: 2px; }
+    .period-controls p, .period-note { flex-basis: 100%; margin: 6px 0; color: #718096; font-size: 12px; line-height: 1.8; }
     .metric-card {
       border: 1px solid var(--card-border);
       border-radius: 16px;
@@ -327,6 +332,7 @@
   <div class="header">
     <h1 class="page-title">HIMS 財報全自動化分析儀表板</h1>
     <div class="meta-info" id="update-info">載入中...</div>
+    <div id="period-controls" class="period-controls" aria-label="財報資料期間"></div>
   </div>
 
   <section class="ai-insight-card" aria-labelledby="ai-insight-title">
@@ -581,13 +587,35 @@ function buildMetricReading(metricId, snapshots, data, periods, insight) {
     return { meaning, reasons, watch: watches[metricId] || '' };
 }
 
-function renderDashboard(json) {
+function renderDashboard(json, selectedPeriod = 'quarter') {
     // --- 1. 資料安全性防護 ---
     if (!json || !json.data || !json.ai) {
         console.error("載入的 JSON 格式不正確");
         return;
     }
 
+    const original = json;
+    const previousSection = document.querySelector('.report-panel.active')?.id;
+    const dual = json.financialFormat === 'dual-period-v1' && json.views?.quarter && json.views?.annual;
+    if (dual) json = { ...json, ...json.views[selectedPeriod] };
+    document.querySelectorAll('#dynamic-content canvas').forEach(canvas => Chart.getChart(canvas)?.destroy());
+    const controls = document.getElementById('period-controls');
+    controls.replaceChildren();
+    if (dual) {
+        for (const [period, label] of [['quarter', '季度 · 最近八季'], ['annual', '年度 · 最近五年']]) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = label;
+            button.setAttribute('aria-pressed', String(period === selectedPeriod));
+            button.addEventListener('click', () => renderDashboard(original, period));
+            controls.appendChild(button);
+        }
+    }
+    const hint = document.createElement('p');
+    hint.textContent = dual
+        ? selectedPeriod === 'quarter' ? '損益與現金流為單季；資產負債為季末快照。報酬率與估值另列 TTM。' : '損益與現金流為全年；資產負債為年末快照，報酬率與估值採年度口徑。'
+        : '此報告保留原資料頻率，各指標期間見數值卡；重新生成後可使用季度／年度切換。';
+    controls.appendChild(hint);
     const data = json.data;
     const ai = json.ai;
 
@@ -754,7 +782,19 @@ function renderDashboard(json) {
             }
 
             // 🎯 只要有數據 (mData) 就一定要畫圖，不能 return 掉
-            if (!mData) return; 
+            if (!mData) {
+                const empty = document.createElement('div');
+                empty.className = 'metric-card';
+                const title = document.createElement('h3');
+                title.className = 'metric-name';
+                title.textContent = metricMeta[metricId]?.title || metricId;
+                const message = document.createElement('p');
+                message.className = 'period-note';
+                message.textContent = '此期間沒有足夠的同口徑資料，暫不繪圖或套用其他期間的 AI 解讀。';
+                empty.append(title, message);
+                panel.appendChild(empty);
+                return;
+            }
 
             // 🎯 如果經過所有對齊邏輯後還是 null (就像現在 HIMS 的負債表)
             // 我們就補上一個預設的物件，這樣圖表就會出來，只是文字會顯示預設內容
@@ -785,6 +825,7 @@ function renderDashboard(json) {
             card.style.setProperty('--metric-soft', theme.soft);
             card.innerHTML = `
                 <div class="metric-name">${metricMeta[metricId]?.title || metricId}</div>
+                ${dual && metricId === 'long_term_solvency' ? `<p class="period-note">${selectedPeriod === 'quarter' ? '季末總債務／截至該季的近四季營運現金流' : '年末總債務／全年營運現金流'}</p>` : ''}
                 <details>
                     <summary>指標定義與說明</summary>
                     <div class="desc-content">${metricMeta[metricId]?.desc || ""}</div>
@@ -859,7 +900,7 @@ function renderDashboard(json) {
         supplementaryNav.querySelector('.supplementary-button')
     ];
 
-    const switchReport = (targetId) => {
+    const switchReport = (targetId, scroll = true) => {
         statementGrid.querySelectorAll('.statement-card').forEach(card => {
             const isActive = card.dataset.reportTarget === targetId;
             card.classList.toggle('active', isActive);
@@ -877,7 +918,7 @@ function renderDashboard(json) {
                 Chart.getChart(canvas)?.resize();
             });
             const scrollTarget = document.getElementById(targetId);
-            scrollTarget?.scrollIntoView({
+            if (scroll) scrollTarget?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start'
             });
@@ -889,6 +930,7 @@ function renderDashboard(json) {
             switchReport(button.dataset.reportTarget);
         });
     });
+    if (previousSection) switchReport(previousSection, false);
 
 }
 
