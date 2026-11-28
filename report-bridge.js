@@ -20,7 +20,7 @@
           const view = report.views[period];
           if (!object(view) || !object(view.periods)
               || !['income', 'eps', 'balance', 'cashFlow'].every(key => view.periods[key] === period)
-              || view.periods.metrics !== (period === 'quarter' ? 'ttm' : 'annual')
+              || !(period === 'quarter' ? ['ttm', 'quarter_ttm'] : ['annual']).includes(view.periods.metrics)
               || !validReport({ symbol, data: view.data, ai: view.ai }, symbol, market)) return false;
         }
       }

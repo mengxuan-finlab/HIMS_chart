@@ -12,7 +12,7 @@
       history.replaceState(null, '', cleanUrl.href);
     }
   </script>
-  <script src="report-bridge.js?v=20261120-1"></script>
+  <script src="report-bridge.js?v=20261124-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -493,9 +493,10 @@ function getMetricSnapshot(raw, metricId, periods = {}) {
     const daysBefore = item => (Date.parse(latest.date) - Date.parse(item.date)) / 86400000;
     const last = history[history.length - 2];
     const spacing = last ? daysBefore(last) : null;
-    const period = periods[group] || (spacing >= 60 && spacing <= 120 ? 'quarter'
+    const rawPeriod = periods[group];
+    const period = (rawPeriod === 'quarter_ttm' ? 'quarter' : rawPeriod) || (spacing >= 60 && spacing <= 120 ? 'quarter'
         : spacing >= 330 && spacing <= 400 ? 'annual' : null);
-    const periodLabel = period === 'quarter' ? '最新季度' : period === 'annual' ? '最新年度' : '最新數值';
+    const periodLabel = rawPeriod === 'quarter_ttm' ? '最新季末 · TTM' : period === 'quarter' ? '最新季度' : period === 'annual' ? '最新年度' : '最新數值';
     // Match a prior-year period before falling back to the immediately preceding quarter.
     let previous = history.slice(0, -1).reverse().find(item => daysBefore(item) >= 330 && daysBefore(item) <= 400);
     let label = period === 'annual' ? '較上年度' : '較去年同期';
@@ -557,7 +558,7 @@ function renderTtmSnapshot(metricId, point, annualRows, asOf) {
     const maxMagnitude = Math.max(1, ...history.map(row => Math.abs(row.value)));
     const bars = history.map(row => `<div class="ttm-history-row"><span>${escapeMetricText(row.date)}</span><span class="ttm-history-track" aria-hidden="true"><span class="ttm-history-bar" data-negative="${row.value < 0}" style="width:${Math.abs(row.value) / maxMagnitude * 100}%"></span></span><strong>${format(row.value)}</strong></div>`).join('');
     return `<section class="ttm-snapshot" aria-label="${label}近十二個月快照">
-        <div class="ttm-hero"><span class="ttm-badge">TTM SNAPSHOT</span><span class="ttm-hero-label">近十二個月</span><strong class="ttm-value">${format(point.value)}</strong>${/^\d{4}-\d{2}-\d{2}$/.test(asOf || '') ? `<small>資料擷取日期：${escapeMetricText(asOf)}</small>` : ''}</div>
+        <div class="ttm-hero"><span class="ttm-badge">TTM SNAPSHOT</span><span class="ttm-hero-label">${point.date === 'TTM' ? '近十二個月' : `截至 ${escapeMetricText(point.date)} 的近十二個月`}</span><strong class="ttm-value">${format(point.value)}</strong>${/^\d{4}-\d{2}-\d{2}$/.test(asOf || '') ? `<small>資料擷取日期：${escapeMetricText(asOf)}</small>` : ''}</div>
         <div class="ttm-reference"><h4>年度歷史參考</h4>
         ${latest ? `<dl class="ttm-reference-stats"><div><dt>最近年度 · ${escapeMetricText(latest.date)}</dt><dd>${format(latest.value)}</dd></div><div><dt>${history.length > 1 ? `近 ${history.length} 個年度區間` : '可取得年度值'}</dt><dd>${range}</dd></div></dl><div class="ttm-history" aria-label="年度歷史數值">${bars}</div>` : '<p>尚無可用的年度參考資料；目前僅呈現 TTM 快照。</p>'}
         </div></section>`;
@@ -647,7 +648,7 @@ function renderDashboard(json) {
     controls.replaceChildren();
     const hint = document.createElement('p');
     hint.textContent = dual
-        ? '各指標可獨立切換期間；本頁總覽以季度為準，報酬率與估值另列 TTM。'
+        ? '各指標可獨立切換期間；本頁總覽以季度為準，估值與回報依各卡片標示口徑。'
         : '此報告保留原資料頻率，各指標期間見數值卡；重新生成後可使用指標內的期間切換。';
     controls.appendChild(hint);
     document.getElementById('ai-insight-title').textContent = dual ? 'AI 財務摘要 · 季度總覽' : 'AI 財務摘要';
@@ -801,7 +802,7 @@ function renderDashboard(json) {
                 toggle.className = 'period-controls metric-period-controls';
                 toggle.setAttribute('role', 'group');
                 toggle.setAttribute('aria-label', `${title.textContent}資料期間`);
-                for (const [period, label] of [['quarter', sec.id === 'valuation' ? 'TTM' : '季度'], ['annual', '年度']]) {
+                for (const [period, label] of [['quarter', sec.id === 'valuation' ? (original.views.quarter.periods.metrics === 'quarter_ttm' ? '季度追蹤' : 'TTM') : '季度'], ['annual', '年度']]) {
                     const button = document.createElement('button');
                     button.type = 'button';
                     button.textContent = label;
@@ -883,12 +884,14 @@ function renderDashboard(json) {
                     valuation: { color: '#64819e', soft: '#eef3f8', fill: 'rgba(100,129,158,.08)' }
                 }[sec.id];
                 const readingBlock = (number, title, content, className = '') => `<div class="metric-reading-block ${className}"><span class="metric-reading-number" aria-hidden="true">${number}</span><div><h4>${title}</h4>${content}</div></div>`;
-                const singleTtm = sec.id === 'valuation' && mData.length === 1 && mData[0].date === 'TTM';
+                const historicalTtm = sec.id === 'valuation' && view.periods?.metrics === 'quarter_ttm';
+                const singleTtm = sec.id === 'valuation' && mData.length === 1 && (mData[0].date === 'TTM' || historicalTtm);
 
                 card.style.setProperty('--metric-accent', theme.color);
                 card.style.setProperty('--metric-soft', theme.soft);
                 content.innerHTML = `
-                    ${dual ? `<p class="period-note">${selectedPeriod === 'annual' ? '最近五年 · ' + (sec.id === 'balance-sheet' ? '年末快照' : '年度口徑') : sec.id === 'valuation' ? '近十二個月（TTM）快照，非單季數值' : '最近八季 · ' + (sec.id === 'balance-sheet' ? '季末快照' : '單季口徑')}</p>` : ''}
+                    ${dual ? `<p class="period-note">${selectedPeriod === 'annual' ? '最近五年 · ' + (sec.id === 'balance-sheet' ? '年末快照' : 'FMP 年度口徑') : sec.id === 'valuation' ? historicalTtm ? '最近八季 · 各季末近十二個月（TTM）' : '近十二個月（TTM）快照，非單季數值' : '最近八季 · ' + (sec.id === 'balance-sheet' ? '季末快照' : '單季口徑')}</p>` : ''}
+                    ${historicalTtm ? `<p class="period-note">${({ roe: '近四季淨利／期初期末平均股東權益', roa: '近四季淨利／期初期末平均總資產', pe: '各季末市值／近四季淨利', peg: '歷史成長 PEG：P/E／TTM 淨利年增率（百分數），非預估 PEG' })[metricId]}</p>` : ''}
                     ${dual && metricId === 'long_term_solvency' ? `<p class="period-note">${selectedPeriod === 'quarter' ? '季末總債務／截至該季的近四季營運現金流' : '年末總債務／全年營運現金流'}</p>` : ''}
                     <details>
                         <summary>指標定義與說明</summary>
