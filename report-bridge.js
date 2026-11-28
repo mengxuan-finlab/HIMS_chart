@@ -6,41 +6,73 @@
     'http://127.0.0.1:5500', 'http://127.0.0.1:8080'
   ]);
   const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-  const strings = value => Array.isArray(value) && value.length <= 30
-    && value.every(item => typeof item === 'string' && item.length <= 10000);
+  const text = value => typeof value === 'string' && value.length <= 10000 ? value : '';
+  const strings = value => Array.isArray(value) ? value.slice(0, 30).filter(item => text(item)) : [];
 
-  function validReport(report, symbol, market) {
+  function normalizeReport(report, symbol, market) {
     try {
-      if (!object(report) || report.symbol !== symbol || !object(report.data) || !object(report.ai)
-          || JSON.stringify(report).length > 1000000) return false;
-      if (report.views !== undefined) {
-        if (market !== 'US' || report.financialFormat !== 'dual-period-v1' || !object(report.views)
-            || Object.keys(report.views).sort().join(',') !== 'annual,quarter') return false;
+      if (!object(report) || report.symbol !== symbol || JSON.stringify(report).length > 1000000) return null;
+      const diagnostics = { invalidSeries: 0, invalidPoints: 0, invalidInsights: 0, discardedViews: 0 };
+      const cleanView = view => {
+        if (!object(view) || !object(view.data)) return null;
+        const entries = Object.entries(view.data);
+        if (entries.length > 60) return null;
+        const data = {};
+        for (const [key, points] of entries) {
+          if (!/^[a-zA-Z0-9_]+$/.test(key) || ['__proto__', 'constructor', 'prototype'].includes(key)
+              || !Array.isArray(points) || points.length > 2000) {
+            diagnostics.invalidSeries++;
+            continue;
+          }
+          data[key] = points.filter(point => {
+            const valid = object(point) && typeof point.date === 'string'
+              && /^(?:TTM|\d{4}-\d{2}(?:-\d{2})?)$/.test(point.date)
+              && (point.value === null || (typeof point.value === 'number' && Number.isFinite(point.value)));
+            if (!valid) diagnostics.invalidPoints++;
+            return valid;
+          });
+        }
+        const source = object(view.ai) ? view.ai : {};
+        const ai = { one_liner: text(source.one_liner), risks: strings(source.risks), by_metric: {} };
+        if (market === 'TW') ai.highlights = strings(source.highlights);
+        if (object(source.by_metric)) {
+          for (const [key, item] of Object.entries(source.by_metric).slice(0, 60)) {
+            if (!/^[a-zA-Z0-9_]+$/.test(key) || ['__proto__', 'constructor', 'prototype'].includes(key) || !object(item)) {
+              diagnostics.invalidInsights++;
+              continue;
+            }
+            ai.by_metric[key] = { summary: text(item.summary), bullets: strings(item.bullets),
+              related_reasons: strings(item.related_reasons) };
+          }
+        }
+        return { data, ai, periods: object(view.periods) ? view.periods : {} };
+      };
+      const usable = view => view && Object.values(view.data).some(points => points.some(point => Number.isFinite(point.value)));
+      let root = cleanView(report);
+      const views = {};
+      if (market === 'US' && report.financialFormat === 'dual-period-v1' && object(report.views)) {
         for (const period of ['quarter', 'annual']) {
           const view = report.views[period];
           if (!object(view) || !object(view.periods)
               || !['income', 'eps', 'balance', 'cashFlow'].every(key => view.periods[key] === period)
-              || !(period === 'quarter' ? ['ttm', 'quarter_ttm'] : ['annual']).includes(view.periods.metrics)
-              || !validReport({ symbol, data: view.data, ai: view.ai }, symbol, market)) return false;
+              || !(period === 'quarter' ? ['ttm', 'quarter_ttm'] : ['annual']).includes(view.periods.metrics)) {
+            diagnostics.discardedViews++;
+            continue;
+          }
+          const cleaned = cleanView(view);
+          if (cleaned) views[period] = cleaned;
+          else diagnostics.discardedViews++;
         }
       }
-      const series = Object.entries(report.data);
-      if (!series.length || series.length > 60 || !series.every(([key, points]) =>
-        /^[a-zA-Z0-9_]+$/.test(key) && Array.isArray(points) && points.length <= 2000
-        && points.every(point => object(point) && typeof point.date === 'string'
-          && /^(?:TTM|\d{4}-\d{2}(?:-\d{2})?)$/.test(point.date)
-          && (point.value === null || (typeof point.value === 'number' && Number.isFinite(point.value)))))) return false;
-      if (typeof report.ai.one_liner !== 'string' || report.ai.one_liner.length > 10000) return false;
-      if (report.ai.risks !== undefined && !strings(report.ai.risks)) return false;
-      if (market === 'TW') return report.ai.highlights === undefined || strings(report.ai.highlights);
-      if (!object(report.ai.by_metric) || Object.keys(report.ai.by_metric).length > 60) return false;
-      return Object.values(report.ai.by_metric).every(item => object(item)
-        && (item.summary === undefined || (typeof item.summary === 'string' && item.summary.length <= 10000))
-        && (item.bullets === undefined || strings(item.bullets))
-        && (item.related_reasons === undefined || strings(item.related_reasons)));
-    } catch { return false; }
+      if (!usable(root)) root = [views.quarter, views.annual].find(usable);
+      if (!usable(root)) return null;
+      const { views: unusedViews, ...metadata } = report;
+      const result = { ...metadata, ...root };
+      if (views.quarter && views.annual) result.views = views;
+      if (Object.values(diagnostics).some(Boolean)) console.warn('[財報圖表部分資料略過]', diagnostics);
+      return result;
+    } catch { return null; }
   }
-
   function receiveReport(market, symbol) {
     return new Promise((resolve, reject) => {
       const params = new URLSearchParams(window.location.search);
@@ -61,10 +93,15 @@
       const onMessage = event => {
         const data = event.data;
         if (event.origin !== parentOrigin || event.source !== window.parent || !object(data)
-            || data.type !== 'dcb:financial-report' || data.version !== 1 || data.channel !== channel
-            || !validReport(data.report, symbol, market)) return;
+            || data.type !== 'dcb:financial-report' || data.version !== 1 || data.channel !== channel) return;
+        const report = normalizeReport(data.report, symbol, market);
+        if (!report) {
+          cleanup();
+          reject(new Error('這份報告目前沒有可顯示的圖表資料。'));
+          return;
+        }
         cleanup();
-        resolve(data.report);
+        resolve(report);
       };
       const ready = () => window.parent.postMessage({ type: 'dcb:chart-ready', version: 1, channel, symbol }, parentOrigin);
       window.addEventListener('message', onMessage);

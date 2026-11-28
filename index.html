@@ -12,7 +12,7 @@
       history.replaceState(null, '', cleanUrl.href);
     }
   </script>
-  <script src="report-bridge.js?v=20261124-1"></script>
+  <script src="report-bridge.js?v=20261128-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -44,6 +44,7 @@
     .page-title { font-size: 36px; font-weight: 800; letter-spacing: -0.025em; margin: 0; }
     .meta-info { font-size: 14px; color: var(--text-muted); margin-top: 8px; }
 
+    .ai-insight-card[hidden], .statement-card[hidden], .supplementary-button[hidden], .report-panel[hidden] { display: none; }
     .ai-insight-card {
       background: linear-gradient(180deg, #f8f7fc, #ffffff 120px);
       border: 1px solid #e1e6ef;
@@ -355,12 +356,12 @@
 
 <main class="page">
   <div class="header">
-    <h1 class="page-title">HIMS 財報全自動化分析儀表板</h1>
+    <h1 class="page-title">財報分析儀表板</h1>
     <div class="meta-info" id="update-info">載入中...</div>
     <div id="period-controls" class="period-controls" aria-label="財報資料期間"></div>
   </div>
 
-  <section class="ai-insight-card" aria-labelledby="ai-insight-title">
+  <section class="ai-insight-card" aria-labelledby="ai-insight-title" hidden>
     <div class="ai-insight-heading"><h3 id="ai-insight-title">AI 財務摘要</h3><span>RESEARCH SNAPSHOT</span></div>
     <div class="one-liner" id="one-liner"></div>
     <div class="insight-risks" id="insight-risks" hidden>
@@ -467,8 +468,7 @@ async function fetchCloudReport() {
         renderDashboard(report);
     } catch (err) {
         console.error("系統讀取錯誤:", err);
-        const container = document.getElementById('dynamic-content');
-        if (container) container.textContent = err.message || '報告暫時無法讀取，請稍後再試。';
+        showReportMessage(`${currentSymbol} 圖表暫時無法載入`, err.message || '請回主網站重新開啟報告。');
     }
 }
 
@@ -702,6 +702,9 @@ function renderDashboard(json) {
 
     const snapshots = Object.fromEntries(Object.keys(metricMeta).map(id =>
         [id, getMetricSnapshot(data[id], id, json.periods)]));
+    const availablePeriodsFor = id => dual ? ['quarter', 'annual'].filter(period =>
+        getProcessedData(id, original.views[period].data)) : [];
+    const hasMetric = id => dual ? availablePeriodsFor(id).length > 0 : !!getProcessedData(id);
 
     const summaryCards = [];
     const improvement = ['revenue', 'net_income', 'eps_diluted', 'operating_cash_flow', 'free_cash_flow']
@@ -747,7 +750,7 @@ function renderDashboard(json) {
                 <h2>${sec.section}</h2>
                 <p>${sec.desc}</p>
                 <div class="statement-metrics">
-                    ${sec.metrics.map(metricId => `
+                    ${sec.metrics.filter(hasMetric).map(metricId => `
                         <span class="statement-metric">
                             ${(metricMeta[metricId]?.title || metricId).split(' (')[0]}
                         </span>
@@ -767,7 +770,7 @@ function renderDashboard(json) {
             class="supplementary-button"
             data-report-target="${supplementarySection.id}"
         >
-            查看估值與回報：ROE、ROA、P/E、PEG
+            查看估值與回報：${supplementarySection.metrics.filter(hasMetric).map(id => ({ roe: 'ROE', roa: 'ROA', pe: 'P/E', peg: 'PEG' })[id]).join('、')}
         </button>
     `;
     container.appendChild(supplementaryNav);
@@ -786,6 +789,8 @@ function renderDashboard(json) {
         container.appendChild(panel);
 
         sec.metrics.forEach(metricId => {
+            const availablePeriods = availablePeriodsFor(metricId);
+            if (dual ? !availablePeriods.length : !getProcessedData(metricId)) return;
             const card = document.createElement('div');
             card.className = 'metric-card';
             card.id = `metric-${metricId}`;
@@ -803,6 +808,7 @@ function renderDashboard(json) {
                 toggle.setAttribute('role', 'group');
                 toggle.setAttribute('aria-label', `${title.textContent}資料期間`);
                 for (const [period, label] of [['quarter', sec.id === 'valuation' ? (original.views.quarter.periods.metrics === 'quarter_ttm' ? '季度追蹤' : 'TTM') : '季度'], ['annual', '年度']]) {
+                    if (!availablePeriods.includes(period)) continue;
                     const button = document.createElement('button');
                     button.type = 'button';
                     button.textContent = label;
@@ -957,8 +963,15 @@ function renderDashboard(json) {
                     });
                 }
             };
-            renderMetric();
+            renderMetric(availablePeriods[0] || 'quarter');
         });
+
+        if (!panel.querySelector('.metric-card')) {
+            panel.hidden = true;
+            const navigation = sec.isSupplementary ? supplementaryNav.querySelector('button')
+                : statementGrid.querySelector(`[data-report-target="${sec.id}"]`);
+            if (navigation) navigation.hidden = true;
+        }
 
     });
 
@@ -997,7 +1010,11 @@ function renderDashboard(json) {
             switchReport(button.dataset.reportTarget);
         });
     });
-    if (previousSection) switchReport(previousSection, false);
+    const activeId = container.querySelector('.report-panel.active:not([hidden])')?.id;
+    const previousPanel = previousSection && document.getElementById(previousSection);
+    const target = previousPanel && !previousPanel.hidden ? previousSection
+        : activeId || container.querySelector('.report-panel:not([hidden])')?.id;
+    if (target) switchReport(target, false);
 
 }
 
